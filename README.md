@@ -156,6 +156,14 @@ The app itself needs no setup beyond that: open `http://localhost:3000` and
 the planner renders with the default demo room (locked sofa and rug, an
 existing console, a $700 budget, nothing spent).
 
+The interface is one continuous workspace: the 3D room dominates the viewport,
+the left rail switches between **Furnish** (marketplace catalog) and **Edit**
+(placed pieces — selecting a piece in the room opens its editor), and
+**Designs**, **Cart**, and **Agent activity** open as focused drawers from the
+top bar or status bar. A slim status bar always shows layout validity, piece
+count, spend, and remaining budget; on phones the same controls live in a
+bottom bar and the rail becomes a bottom sheet.
+
 Other commands:
 
 ```bash
@@ -207,9 +215,10 @@ branch supports both the direct JSON string observed in the browser relay and
 the MCP-shaped `{content:[{type:'text', text:'…'}]}` envelope used by other
 Model Context integrations.
 
-Watch the **Agent activity** panel as you call tools: each completed action
-appears there, and every mutation also updates the 3D scene, the header
-budget line, and the validation state live.
+Watch the **Agent activity** entry in the status bar (open its drawer from
+there) as you call tools: each completed action appears, and every mutation
+also updates the 3D scene, the header budget line, and the validation state
+live.
 
 ## Demo workflows
 
@@ -251,9 +260,10 @@ cart".
 The Budget Rescue preset is the same room with four premium marketplace
 pieces (Terra Coffee Table $340, Halo Floor Lamp $220, Aria Accent Chair
 $310, Alder Ladder Shelf $270 = **$1,140 against a $1,000 budget** — layout
-fully valid, price not). Load it via the **Load Budget Rescue** button in the
-Design & cart panel (or "Reset room" to return to the default demo), then
-swap each premium piece for its value replacement:
+fully valid, price not). Load it with the **Load Budget Rescue** button in
+the **Designs** drawer (top-right **Save design** opens it; **Reset room**
+there returns to the default demo), then swap each premium piece for its
+value replacement:
 
 ```js
 await run('get_room_state');        // 6 items; pricing: newTotal 1140, remaining -140, overBudget true
@@ -300,11 +310,14 @@ Vitest under jsdom:
 src/
   app/              Next.js App Router shell (page, layout, global styles)
   components/
-    planner/        PlannerShell, header (budget/camera), inspector
-                    (move/rotate/lock/remove), design+cart panel, activity feed
-    marketplace/    MarketplacePanel (search, filters, one-click zone placement)
+    planner/        workspace shell: PlannerShell (stage + rail + drawers),
+                    PlannerHeader (budget + actions), WorkspaceStatusBar,
+                    WorkspaceDrawer; panels: FurnitureInspector,
+                    DesignCartPanel (designs/cart), AgentActivityFeed
+    marketplace/    MarketplacePanel (search, filters, product rows)
     three/          R3F scene: room architecture, furniture meshes,
                     camera controller (orbit/top/front/side), canvas
+    WebMcpProvider  single Model Context registry host for the page
   data/             deterministic catalog (78 products), placement zones,
                     demo presets (default demo + Budget Rescue)
   domain/           pure logic: catalog, placement, validation, pricing,
@@ -313,6 +326,19 @@ src/
   webmcp/           Model Context API surface: registerTools, serialize,
                     tools/readTools.ts (9), tools/mutationTools.ts (10)
 ```
+
+Each `src/` directory and every runtime rule is explained in depth in
+`docs/ARCHITECTURE.md`; the Model Context surface is specified in
+`docs/WEBMCP.md`; commands and verification passes live in `docs/TESTING.md`.
+
+## Documentation
+
+- `docs/ARCHITECTURE.md` — module map, state model and actions, domain rules,
+  determinism, UI composition, 3D rendering approach.
+- `docs/WEBMCP.md` — the Model Context surface: registration lifecycle,
+  result envelope, per-tool schema, structured errors, privacy boundary.
+- `docs/TESTING.md` — commands, test-suite contracts, and the manual
+  desktop/mobile/WebMCP verification pass.
 
 ## Deterministic behavior
 
