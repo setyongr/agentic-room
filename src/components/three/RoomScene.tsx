@@ -27,6 +27,7 @@ import { RoomArchitecture } from '@/components/three/RoomArchitecture';
  */
 export function RoomScene() {
   const room = useRoomStore((state) => state.room);
+  const roomAppearance = useRoomStore((state) => state.roomAppearance);
   const furniture = useRoomStore((state) => state.furniture);
   const issues = useRoomStore((state) => state.validation.issues);
   const selectedInstanceId = useRoomStore((state) => state.selectedInstanceId);
@@ -82,7 +83,7 @@ export function RoomScene() {
       />
       <directionalLight position={[-4.5, 3, -4]} intensity={0.45} />
 
-      <RoomArchitecture room={room} issues={issues} />
+      <RoomArchitecture room={room} appearance={roomAppearance} issues={issues} />
 
       {furniture.map((item) => {
         const product = getProductById(item.productId);

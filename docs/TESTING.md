@@ -19,7 +19,7 @@ bun run start      # serve the production build   (http://localhost:3000)
 bun run dev        # development server with HMR
 ```
 
-Expected baseline at time of writing: typecheck clean, **39 tests across 6
+Expected baseline at time of writing: typecheck clean, **54 tests across 7
 files**, production build succeeds with a single static route (`/`).
 
 ## 2. Automated suites (`src/domain/*.test.ts`)
@@ -30,10 +30,11 @@ catalog products and the seeded room — no React, no store, no WebMCP.
 | Suite | Tests | Contract covered |
 | --- | --- | --- |
 | `validation.test.ts` | 5 | Out-of-bounds detection; overlap tolerance; east-window, balcony-door, and entry-door clearance blocking. Each fixture isolates exactly one issue so removing the validator fails the test. |
-| `placement.test.ts` | 6 | Locked items reject removal/replacement with `item_locked`; locked items stay movable/rotatable; failed actions never mutate caller-owned arrays; unlocked removal succeeds. |
+| `placement.test.ts` | 13 | Locked items reject removal/replacement with `item_locked`; locked items stay movable/rotatable; failed actions never mutate caller-owned arrays; unlocked removal succeeds. Variant contract: catalog-default resolution, authored colorway storage, `invalid_variant` rejection with available-value details, variant preservation across move/rotate/lock, and keep-or-reset color on replacement. |
 | `pricing.test.ts` | 6 | Existing items contribute $0; marketplace items price at current catalog prices; signed remaining/over-budget semantics; missing catalog products never corrupt totals; replacement repricing is exact. |
 | `alternatives.test.ts` | 5 | Candidates are in-stock, strictly cheaper, same category, dimensionally compatible; savings exact; ranking deterministic (pinned order); `maxResults`/`targetPrice` respected; structured errors (`missing_instance`, `existing_instance`, `locked_instance`, `missing_product`). |
-| `designs.test.ts` | 9 | Snapshot capture/restore fidelity and deep-copy isolation (mutating one side never affects the other); seeded demo snapshot restores byte-identically; corrupt/duplicate input rejected with structured codes. |
+| `appearance.test.ts` | 7 | `updateRoomAppearance`: immutable single-field updates; same-value/empty patches return the original reference; invalid wall/floor/wallpaper ids rejected in wall → floor → wallpaper order with exact `field`/`allowedValues` details. |
+| `designs.test.ts` | 10 | Snapshot capture/restore fidelity and deep-copy isolation (mutating one side never affects the other); seeded demo snapshot restores byte-identically; corrupt/duplicate input rejected with structured codes. Room appearance and per-item variants round-trip byte-for-byte and are deep-cloned; missing/malformed appearance or variant data fails with `invalid_snapshot`. |
 | `cart.test.ts` | 8 | Marketplace-only adds (existing sofa/rug can never enter); all-or-nothing rejection; unique line ids; dedupe of already-carted instances; totals match catalog prices. |
 
 ## 3. WebMCP verification (browser)
@@ -48,11 +49,11 @@ bun run build && bun run start   # or: bun run dev
 # open http://localhost:3000
 ```
 
-Confirm the API is present and 19 tools registered:
+Confirm the API is present and 20 tools registered:
 
 ```js
 const mc = document.modelContext ?? navigator.modelContext;
-(await mc.getTools()).map((t) => t.name); // 19 names: 9 reads + 10 mutations
+(await mc.getTools()).map((t) => t.name); // 20 names: 9 reads + 11 mutations
 ```
 
 ### 3.2 Driver
@@ -74,6 +75,13 @@ sanity signal that the call landed on the live store.
    `productId` while keeping `instanceId`; `save_design` →
    `get_saved_designs` lists it; `load_design` restores it; `add_to_cart`
    increments the cart; `remove_product` removes it.
+   Variant/style round-trips: `place_product` with a non-default `color`
+   (and matching material) returns an item whose `variant` matches in
+   `get_room_state`; `set_room_appearance` (explicit ids, then `preset:
+   "default"`) changes and restores `get_room_state.appearance` with one
+   fixed "Updated room finishes" feed entry per actual change and none for a
+   repeated identical call; `save_design` → change appearance → `load_design`
+   restores both appearance and item variants.
 3. **Invalid calls return helpful errors** (all `success: false`):
    - `set_budget` with `-1` → `invalid_args`
    - `place_product` with an unknown product → `missing_product`
@@ -82,6 +90,11 @@ sanity signal that the call landed on the live store.
    - `find_cheaper_alternatives` on the seeded existing sofa →
      `existing_instance`
    - `load_design` with an unknown id → `design_not_found`
+   - `place_product` with a color outside the product's colors or a
+     mismatched `material` → `invalid_variant` with `availableColors`/
+     `availableMaterials` details
+   - `set_room_appearance` with one finish id alone, or `preset` plus
+     explicit ids → `invalid_args`
    - State must be unchanged after each failure (no partial mutation).
 4. **Scene sync:** after an agent `place_product`, the 3D room shows the new
    piece (camera Top view helps) and the header spend figure updates.

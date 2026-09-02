@@ -19,12 +19,15 @@
 
 import * as pricing from '@/domain/pricing';
 import type { FurnitureProduct, PlacedFurniture, SerializableError } from '@/domain/types';
+import { FLOOR_FINISH_IDS, WALL_FINISH_IDS, WALLPAPER_IDS } from '@/domain/types';
+import { DEFAULT_ROOM_APPEARANCE } from '@/data/appearance';
 import { useRoomStore } from '@/store/roomStore';
 import type { RoomStore } from '@/store/roomStore';
 import {
   isPlainObject,
   readObjectInput,
   readOptionalBoolean,
+  readOptionalEnum,
   readOptionalNumber,
   readOptionalString,
   readOptionalStringArray,
@@ -123,7 +126,7 @@ function resultFail(result: SerializableError): string {
 function placeProductTool(): ModelContextTool {
   return mutationTool(
     'place_product',
-    'Place a product through the same store action as the UI: zoneId centers it in a placement zone (category, capacity, and fit are domain-enforced), or position x/z places it explicitly (unvalidated geometry); optional rotation. Returns the new item, refreshed pricing (newTotal, budget, remaining, overBudget), and current layout validity and issues. Failures (missing/out-of-stock product, unknown/full/incompatible zone) leave the room unchanged.',
+    'Place a product through the same store action as the UI: zoneId centers it in a placement zone (category, capacity, and fit are domain-enforced), or position x/z places it explicitly (unvalidated geometry); optional rotation; optional color (one of the product\u2019s authored colors) with the product\u2019s material. Returns the new item with its stored variant, refreshed pricing (newTotal, budget, remaining, overBudget), and current layout validity and issues. Failures (missing/out-of-stock product, unknown/full/incompatible zone, unavailable color or material) leave the room unchanged.',
     (input) => {
       const args = readObjectInput(input);
       if (!args.ok) return toolFail(args.code, args.message);
@@ -131,10 +134,14 @@ function placeProductTool(): ModelContextTool {
       const zoneId = readOptionalString(args.value, 'zoneId', { maxLength: 60 });
       const position = readPositionArg(args.value);
       const rotation = readOptionalNumber(args.value, 'rotation');
+      const color = readOptionalString(args.value, 'color', { maxLength: 40 });
+      const material = readOptionalString(args.value, 'material', { maxLength: 40 });
       if (!productId.ok) return toolFail(productId.code, productId.message);
       if (!zoneId.ok) return toolFail(zoneId.code, zoneId.message);
       if (!position.ok) return toolFail(position.code, position.message);
       if (!rotation.ok) return toolFail(rotation.code, rotation.message);
+      if (!color.ok) return toolFail(color.code, color.message);
+      if (!material.ok) return toolFail(material.code, material.message);
       if (zoneId.value === undefined && position.value === undefined) {
         return toolFail('invalid_args', 'Specify either "zoneId" or "position" (an object with x and z) to place the product');
       }
@@ -144,6 +151,9 @@ function placeProductTool(): ModelContextTool {
           ...(zoneId.value !== undefined ? { zoneId: zoneId.value } : {}),
           ...(position.value !== undefined ? { x: position.value.x, z: position.value.z } : {}),
           ...(rotation.value !== undefined ? { rotation: rotation.value } : {}),
+          ...(color.value !== undefined || material.value !== undefined
+            ? { variant: { ...(color.value !== undefined ? { color: color.value } : {}), ...(material.value !== undefined ? { material: material.value } : {}) } }
+            : {}),
         },
         'agent',
       );
@@ -181,6 +191,14 @@ function placeProductTool(): ModelContextTool {
         rotation: {
           type: 'number',
           description: 'Yaw in degrees; normalized to [0, 360). Defaults to the product default (0).',
+        },
+        color: {
+          type: 'string',
+          description: 'Chosen colorway, one of the product\u2019s authored colors (see get_product). Defaults to the first color.',
+        },
+        material: {
+          type: 'string',
+          description: 'The product\u2019s authored material; mismatched values fail with invalid_variant.',
         },
       },
       required: ['productId'],
@@ -434,7 +452,7 @@ function replaceProductTool(): ModelContextTool {
 function saveDesignTool(): ModelContextTool {
   return mutationTool(
     'save_design',
-    'Capture the current design (room, placed items, budget) as a saved snapshot with the given name through the same store action as the UI; saved designs can be restored later with load_design. The live design is unchanged. Returns the snapshot metadata: id, name, creation and update timestamps, budget, item count, marketplace total at save time, and the number of designs saved this session.',
+    'Capture the current design (room, placed items with their color variants, budget, room appearance) as a saved snapshot with the given name through the same store action as the UI; saved designs can be restored later with load_design. The live design is unchanged. Returns the snapshot metadata: id, name, creation and update timestamps, budget, item count, marketplace total and room appearance at save time, and the number of designs saved this session.',
     (input) => {
       const args = readObjectInput(input);
       if (!args.ok) return toolFail(args.code, args.message);
@@ -461,6 +479,11 @@ function saveDesignTool(): ModelContextTool {
           budget: snapshot.budget,
           itemCount: snapshot.items.length,
           newTotal: pricing.calculateTotal(snapshot.items, snapshot.budget).newTotal,
+          appearance: {
+            wallFinishId: snapshot.appearance.wallFinishId,
+            floorFinishId: snapshot.appearance.floorFinishId,
+            wallpaperId: snapshot.appearance.wallpaperId,
+          },
         },
         savedDesignCount: state.savedDesigns.length,
       });
@@ -487,7 +510,7 @@ function saveDesignTool(): ModelContextTool {
 function loadDesignTool(): ModelContextTool {
   return mutationTool(
     'load_design',
-    'Restore a design saved earlier this session (see get_saved_designs) through the same store action as the UI, replacing the current room, placed items, and budget. Destructive: the current unsaved design is discarded. Returns the design id and name, restored item count, budget, refreshed marketplace total and remaining, and current layout validity and issues. Unknown ids fail with design_not_found.',
+    'Restore a design saved earlier this session (see get_saved_designs) through the same store action as the UI, replacing the current room, placed items (with their color variants), budget, and room appearance. Destructive: the current unsaved design is discarded. Returns the design id and name, restored item count, budget, appearance, refreshed marketplace total and remaining, and current layout validity and issues. Unknown ids fail with design_not_found.',
     (input) => {
       const args = readObjectInput(input);
       if (!args.ok) return toolFail(args.code, args.message);
@@ -505,6 +528,11 @@ function loadDesignTool(): ModelContextTool {
           budget: fresh.budget,
           newTotal: fresh.pricing.newTotal,
           remaining: fresh.pricing.remaining,
+          appearance: {
+            wallFinishId: fresh.roomAppearance.wallFinishId,
+            floorFinishId: fresh.roomAppearance.floorFinishId,
+            wallpaperId: fresh.roomAppearance.wallpaperId,
+          },
         },
         layout: layoutBlock(fresh),
       });
@@ -578,6 +606,96 @@ function addToCartTool(): ModelContextTool {
   );
 }
 
+/** Set the room appearance (wall finish, floor finish, wallpaper). */
+function setRoomAppearanceTool(): ModelContextTool {
+  return mutationTool(
+    'set_room_appearance',
+    'Style the room through the same store action as the UI: either supply all three finish ids (wallFinishId, floorFinishId, wallpaperId) or use preset "default" to restore the defaults (gallery-white walls, natural-oak floor, no wallpaper). Visual only: pricing, layout, and validation are never affected. Returns the resolved appearance and current layout validity and issues.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const wallFinishId = readOptionalEnum(args.value, 'wallFinishId', WALL_FINISH_IDS);
+      const floorFinishId = readOptionalEnum(args.value, 'floorFinishId', FLOOR_FINISH_IDS);
+      const wallpaperId = readOptionalEnum(args.value, 'wallpaperId', WALLPAPER_IDS);
+      const preset = readOptionalEnum(args.value, 'preset', ['default'] as const);
+      if (!wallFinishId.ok) return toolFail(wallFinishId.code, wallFinishId.message);
+      if (!floorFinishId.ok) return toolFail(floorFinishId.code, floorFinishId.message);
+      if (!wallpaperId.ok) return toolFail(wallpaperId.code, wallpaperId.message);
+      if (!preset.ok) return toolFail(preset.code, preset.message);
+
+      const explicitCount = [wallFinishId.value, floorFinishId.value, wallpaperId.value].filter(
+        (value) => value !== undefined,
+      ).length;
+      const wantsPreset = preset.value !== undefined;
+      if (wantsPreset && explicitCount > 0) {
+        return toolFail('invalid_args', 'Specify either "preset" or the three finish ids, not both');
+      }
+      if (!wantsPreset && explicitCount !== 3) {
+        return toolFail(
+          'invalid_args',
+          'Specify all three of "wallFinishId", "floorFinishId", and "wallpaperId", or "preset": "default"',
+        );
+      }
+      const store = useRoomStore.getState();
+      const result = store.setRoomAppearance(
+        wantsPreset
+          ? DEFAULT_ROOM_APPEARANCE
+          : {
+              wallFinishId: wallFinishId.value as (typeof WALL_FINISH_IDS)[number],
+              floorFinishId: floorFinishId.value as (typeof FLOOR_FINISH_IDS)[number],
+              wallpaperId: wallpaperId.value as (typeof WALLPAPER_IDS)[number],
+            },
+        'agent',
+      );
+      if (!result.ok) return resultFail(result);
+      const fresh = useRoomStore.getState();
+      return toolOk({
+        appearance: {
+          wallFinishId: fresh.roomAppearance.wallFinishId,
+          floorFinishId: fresh.roomAppearance.floorFinishId,
+          wallpaperId: fresh.roomAppearance.wallpaperId,
+        },
+        layout: layoutBlock(fresh),
+      });
+    },
+    {
+      type: 'object',
+      properties: {
+        wallFinishId: {
+          type: 'string',
+          description: 'Wall finish id; one of: gallery-white, warm-sand, soft-sage, clay-plaster.',
+          enum: [...WALL_FINISH_IDS],
+        },
+        floorFinishId: {
+          type: 'string',
+          description: 'Floor finish id; one of: natural-oak, white-oak, walnut, slate-tile.',
+          enum: [...FLOOR_FINISH_IDS],
+        },
+        wallpaperId: {
+          type: 'string',
+          description: 'Wallpaper id; one of: none, linen-stripe, botanical-line, arched-geo.',
+          enum: [...WALLPAPER_IDS],
+        },
+        preset: {
+          type: 'string',
+          description: 'Reset to the default styling.',
+          enum: ['default'],
+        },
+      },
+      oneOf: [
+        {
+          type: 'object',
+          required: ['wallFinishId', 'floorFinishId', 'wallpaperId'],
+          properties: { wallFinishId: { type: 'string' }, floorFinishId: { type: 'string' }, wallpaperId: { type: 'string' } },
+          additionalProperties: false,
+        },
+        { type: 'object', required: ['preset'], properties: { preset: { type: 'string' } }, additionalProperties: false },
+      ],
+      additionalProperties: false,
+    },
+  );
+}
+
 /**
  * The complete mutating WebMCP tool surface for the room editor.
  *
@@ -594,6 +712,7 @@ export function createMutationTools(): readonly ModelContextTool[] {
     removeProductTool(),
     setItemLockedTool(),
     setBudgetTool(),
+    setRoomAppearanceTool(),
     replaceProductTool(),
     saveDesignTool(),
     loadDesignTool(),

@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest';
 import { createDesignSnapshot, loadDesignSnapshot } from './designs';
 import { DEFAULT_DEMO_SNAPSHOT, DEFAULT_ROOM_ITEMS } from '@/data/demoRoom';
 import { DEMO_BUDGET } from '@/data/products';
-import type { PlacedFurniture, RoomData, SerializableResult } from './types';
+import type { PlacedFurniture, RoomAppearance, RoomData, SerializableResult } from './types';
+import { DEFAULT_ROOM_APPEARANCE } from '@/data/appearance';
 
 const META = {
   id: 'snapshot-test-1',
@@ -21,6 +22,12 @@ const META = {
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-02T00:00:00.000Z',
   thumbnailGradient: 'linear-gradient(135deg, #F3E9DC, #C96F4A)',
+};
+
+const TEST_APPEARANCE: RoomAppearance = {
+  wallFinishId: 'warm-sand',
+  floorFinishId: 'white-oak',
+  wallpaperId: 'botanical-line',
 };
 
 /** A room with real demo geometry: openings with footprints and zones with/without optional fields. */
@@ -74,6 +81,7 @@ function makeItems(): PlacedFurniture[] {
       rotation: 180,
       locked: true,
       source: 'existing',
+      variant: { color: 'linen', material: 'linen' },
     },
     {
       instanceId: 'existing-rug',
@@ -82,6 +90,7 @@ function makeItems(): PlacedFurniture[] {
       rotation: 90,
       locked: true,
       source: 'existing',
+      variant: { color: 'ivory', material: 'wool' },
     },
     {
       instanceId: 'rescue-coffee-table',
@@ -90,6 +99,7 @@ function makeItems(): PlacedFurniture[] {
       rotation: 0,
       locked: false,
       source: 'marketplace',
+      variant: { color: 'walnut', material: 'walnut' },
     },
     {
       instanceId: 'rescue-floor-lamp',
@@ -98,6 +108,7 @@ function makeItems(): PlacedFurniture[] {
       rotation: 270,
       locked: true,
       source: 'marketplace',
+      variant: { color: 'cream', material: 'brass' },
     },
   ];
 }
@@ -120,7 +131,7 @@ describe('createDesignSnapshot + loadDesignSnapshot', () => {
   it('restores furniture, budget, room, and meta faithfully', () => {
     const room = makeRoom();
     const items = makeItems();
-    const snapshot = expectSuccess(createDesignSnapshot(room, items, 1250.5, META));
+    const snapshot = expectSuccess(createDesignSnapshot(room, items, 1250.5, TEST_APPEARANCE, META));
 
     expect(snapshot.id).toBe(META.id);
     expect(snapshot.name).toBe(META.name);
@@ -133,6 +144,8 @@ describe('createDesignSnapshot + loadDesignSnapshot', () => {
     expect(restored.budget).toBe(1250.5);
     expect(restored.room).toEqual(room);
     expect(restored.items).toEqual(items);
+    expect(snapshot.appearance).toEqual(TEST_APPEARANCE);
+    expect(restored.appearance).toEqual(TEST_APPEARANCE);
     for (let i = 0; i < items.length; i++) {
       expect(restored.items[i].instanceId).toBe(items[i].instanceId);
       expect(restored.items[i].productId).toBe(items[i].productId);
@@ -140,13 +153,15 @@ describe('createDesignSnapshot + loadDesignSnapshot', () => {
       expect(restored.items[i].rotation).toBe(items[i].rotation);
       expect(restored.items[i].locked).toBe(items[i].locked);
       expect(restored.items[i].source).toBe(items[i].source);
+      expect(restored.items[i].variant).toEqual(items[i].variant);
     }
   });
 
   it('keeps the snapshot isolated from the live design it was saved from', () => {
     const room = makeRoom();
     const items = makeItems();
-    const snapshot = expectSuccess(createDesignSnapshot(room, items, 1250.5, META));
+    const appearance = { ...TEST_APPEARANCE };
+    const snapshot = expectSuccess(createDesignSnapshot(room, items, 1250.5, appearance, META));
 
     // Mutate every mutable layer of the live design after saving.
     room.dimensions.width = 99;
@@ -155,16 +170,20 @@ describe('createDesignSnapshot + loadDesignSnapshot', () => {
     items[0].position.x = 99;
     items[0].rotation = 45;
     items[0].locked = false;
+    items[0].variant.color = 'oak';
     items[1].source = 'marketplace';
+    appearance.wallFinishId = 'clay-plaster';
+    appearance.wallpaperId = 'arched-geo';
 
     const restored = expectSuccess(loadDesignSnapshot(snapshot));
     expect(restored.room).toEqual(makeRoom());
     expect(restored.items).toEqual(makeItems());
     expect(restored.budget).toBe(1250.5);
+    expect(restored.appearance).toEqual(TEST_APPEARANCE);
   });
 
   it('keeps the snapshot isolated from the restored design', () => {
-    const snapshot = expectSuccess(createDesignSnapshot(makeRoom(), makeItems(), 1250.5, META));
+    const snapshot = expectSuccess(createDesignSnapshot(makeRoom(), makeItems(), 1250.5, TEST_APPEARANCE, META));
     const first = expectSuccess(loadDesignSnapshot(snapshot));
 
     // Mutating the restored state must not leak back into the snapshot.
@@ -183,7 +202,7 @@ describe('createDesignSnapshot + loadDesignSnapshot', () => {
   it('never shares mutable references with the caller', () => {
     const room = makeRoom();
     const items = makeItems();
-    const snapshot = expectSuccess(createDesignSnapshot(room, items, 1250.5, META));
+    const snapshot = expectSuccess(createDesignSnapshot(room, items, 1250.5, TEST_APPEARANCE, META));
 
     expect(snapshot.room).not.toBe(room);
     expect(snapshot.items).not.toBe(items);
@@ -207,30 +226,35 @@ describe('createDesignSnapshot + loadDesignSnapshot', () => {
     expect(restored.budget).toBe(DEMO_BUDGET);
     expect(restored.room).toEqual(DEFAULT_DEMO_SNAPSHOT.room);
     expect(restored.items).toEqual(DEFAULT_ROOM_ITEMS);
+    expect(restored.appearance).toEqual(DEFAULT_ROOM_APPEARANCE);
     expect(restored.items.map((item) => item.locked)).toEqual([true, true, false]);
     expect(restored.items.map((item) => item.source)).toEqual([
       'existing',
       'existing',
       'existing',
     ]);
+    for (const item of restored.items) {
+      expect(item.variant.color).toBeTruthy();
+      expect(item.variant.material).toBeTruthy();
+    }
   });
 
   it('rejects duplicate instance ids when saving', () => {
     const items = makeItems();
     items.push({ ...items[0] });
-    const error = expectRejected(createDesignSnapshot(makeRoom(), items, 1250.5, META));
+    const error = expectRejected(createDesignSnapshot(makeRoom(), items, 1250.5, TEST_APPEARANCE, META));
     expect(error.code).toBe('duplicate_instance_ids');
     expect(error.details).toEqual({ instanceIds: ['existing-sofa'] });
   });
 
   it('rejects a non-finite budget when saving', () => {
-    const error = expectRejected(createDesignSnapshot(makeRoom(), makeItems(), Number.NaN, META));
+    const error = expectRejected(createDesignSnapshot(makeRoom(), makeItems(), Number.NaN, TEST_APPEARANCE, META));
     expect(error.code).toBe('invalid_budget');
     expect(error.details).toEqual({ budget: Number.NaN });
   });
 
   it('rejects malformed snapshots when restoring', () => {
-    const valid = expectSuccess(createDesignSnapshot(makeRoom(), makeItems(), 1250.5, META));
+    const valid = expectSuccess(createDesignSnapshot(makeRoom(), makeItems(), 1250.5, TEST_APPEARANCE, META));
 
     const badBudget = expectRejected(loadDesignSnapshot({ ...valid, budget: Number.NaN }));
     expect(badBudget.code).toBe('invalid_snapshot');
@@ -258,11 +282,61 @@ describe('createDesignSnapshot + loadDesignSnapshot', () => {
   });
 
   it('rejects duplicate instance ids when restoring', () => {
-    const valid = expectSuccess(createDesignSnapshot(makeRoom(), makeItems(), 1250.5, META));
+    const valid = expectSuccess(createDesignSnapshot(makeRoom(), makeItems(), 1250.5, TEST_APPEARANCE, META));
     const error = expectRejected(
       loadDesignSnapshot({ ...valid, items: [valid.items[0], { ...valid.items[0] }] }),
     );
     expect(error.code).toBe('duplicate_instance_ids');
     expect(error.details).toEqual({ instanceIds: ['existing-sofa'] });
+  });
+
+  it('rejects snapshots with missing or malformed appearance or variants', () => {
+    const valid = expectSuccess(createDesignSnapshot(makeRoom(), makeItems(), 1250.5, TEST_APPEARANCE, META));
+
+    const missingAppearance = expectRejected(
+      loadDesignSnapshot({
+        ...valid,
+        appearance: undefined as unknown as RoomAppearance,
+      }),
+    );
+    expect(missingAppearance.code).toBe('invalid_snapshot');
+    expect(missingAppearance.details).toEqual({ issue: 'room appearance is missing' });
+
+    const badWallpaper = expectRejected(
+      loadDesignSnapshot({
+        ...valid,
+        appearance: { ...valid.appearance, wallpaperId: 'strobe' as RoomAppearance['wallpaperId'] },
+      }),
+    );
+    expect(badWallpaper.code).toBe('invalid_snapshot');
+    expect(badWallpaper.details).toEqual({ issue: 'room appearance ids are invalid' });
+
+    const missingVariant = expectRejected(
+      loadDesignSnapshot({
+        ...valid,
+        items: [
+          {
+            ...valid.items[0],
+            variant: undefined as unknown as PlacedFurniture['variant'],
+          },
+        ],
+      }),
+    );
+    expect(missingVariant.code).toBe('invalid_snapshot');
+    expect(missingVariant.details).toEqual({ issue: 'item 0 variant is missing' });
+
+    const malformedVariant = expectRejected(
+      loadDesignSnapshot({
+        ...valid,
+        items: [
+          {
+            ...valid.items[0],
+            variant: { color: 'linen', material: 7 } as unknown as PlacedFurniture['variant'],
+          },
+        ],
+      }),
+    );
+    expect(malformedVariant.code).toBe('invalid_snapshot');
+    expect(malformedVariant.details).toEqual({ issue: 'item 0 variant is not valid strings' });
   });
 });

@@ -1,7 +1,8 @@
 'use client';
 
-import { Suspense, useCallback } from 'react';
+import { Suspense, useCallback, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { resolveAppearance } from '@/data/appearance';
 import { useRoomStore } from '@/store/roomStore';
 import { CameraController } from '@/components/three/CameraController';
 import { RoomScene } from '@/components/three/RoomScene';
@@ -21,17 +22,17 @@ import { RoomScene } from '@/components/three/RoomScene';
  * The viewport itself is decorative (`aria-hidden`): the surrounding UI
  * supplies the semantic, keyboard-accessible room summary.
  */
-function RoomCanvasFallback() {
+function RoomCanvasFallback({ floorColor, wallColor }: { floorColor: string; wallColor: string }) {
   return (
     <group>
       <ambientLight intensity={1.15} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
         <planeGeometry args={[16, 16]} />
-        <meshStandardMaterial color="#cbd5e1" roughness={1} />
+        <meshStandardMaterial color={floorColor} roughness={1} />
       </mesh>
       <mesh position={[0, 0.62, 0]}>
         <boxGeometry args={[2.1, 1.24, 1.2]} />
-        <meshStandardMaterial color="#f8fafc" roughness={0.88} />
+        <meshStandardMaterial color={wallColor} roughness={0.88} />
       </mesh>
     </group>
   );
@@ -39,8 +40,13 @@ function RoomCanvasFallback() {
 
 export function RoomCanvas() {
   const cameraMode = useRoomStore((state) => state.cameraMode);
+  const roomAppearance = useRoomStore((state) => state.roomAppearance);
   const selectItem = useRoomStore((state) => state.selectItem);
   const handlePointerMissed = useCallback(() => selectItem(null), [selectItem]);
+  const voidColor = useMemo(
+    () => resolveAppearance(roomAppearance).wall.voidColor,
+    [roomAppearance],
+  );
 
   return (
     <div className="relative h-full w-full overflow-hidden" aria-hidden="true">
@@ -52,8 +58,15 @@ export function RoomCanvas() {
         onPointerMissed={handlePointerMissed}
         style={{ position: 'absolute', inset: 0 }}
       >
-        <color attach="background" args={['#e2e8f0']} />
-        <Suspense fallback={<RoomCanvasFallback />}>
+        <color attach="background" args={[voidColor]} />
+        <Suspense
+          fallback={
+            <RoomCanvasFallback
+              floorColor={resolveAppearance(roomAppearance).floor.base}
+              wallColor={resolveAppearance(roomAppearance).wall.wall}
+            />
+          }
+        >
           <RoomScene />
           <CameraController mode={cameraMode} />
         </Suspense>

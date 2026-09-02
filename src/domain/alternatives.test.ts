@@ -57,6 +57,7 @@ function placedChair(overrides?: Partial<PlacedFurniture>): PlacedFurniture {
     rotation: 0,
     locked: false,
     source: 'marketplace',
+    variant: { color: currentProduct().colors[0] ?? 'linen', material: currentProduct().material },
     ...overrides,
   };
 }

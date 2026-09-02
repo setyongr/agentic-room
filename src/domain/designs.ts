@@ -16,9 +16,11 @@ import type {
   DesignSnapshot,
   PlacedFurniture,
   RectFootprint,
+  RoomAppearance,
   RoomData,
   SerializableResult,
 } from './types';
+import { FLOOR_FINISH_IDS, WALL_FINISH_IDS, WALLPAPER_IDS } from './types';
 
 /** Caller-provided identity and timestamps for a new snapshot. */
 export interface DesignSnapshotMeta {
@@ -39,6 +41,8 @@ export interface RestoredDesign {
   room: RoomData;
   items: readonly PlacedFurniture[];
   budget: number;
+  /** room styling at snapshot time */
+  appearance: RoomAppearance;
 }
 
 /** Returns the first instance id appearing more than once, if any. */
@@ -66,6 +70,7 @@ function clonePlacedFurniture(item: PlacedFurniture): PlacedFurniture {
     rotation: item.rotation,
     locked: item.locked,
     source: item.source,
+    variant: { color: item.variant.color, material: item.variant.material },
   };
 }
 
@@ -110,6 +115,7 @@ export function createDesignSnapshot(
   room: RoomData,
   items: readonly PlacedFurniture[],
   budget: number,
+  appearance: RoomAppearance,
   meta: DesignSnapshotMeta,
 ): SerializableResult<DesignSnapshot> {
   if (!Number.isFinite(budget)) {
@@ -139,6 +145,11 @@ export function createDesignSnapshot(
       room: cloneRoomData(room),
       items: items.map(clonePlacedFurniture),
       budget,
+      appearance: {
+        wallFinishId: appearance.wallFinishId,
+        floorFinishId: appearance.floorFinishId,
+        wallpaperId: appearance.wallpaperId,
+      },
       ...(meta.thumbnailGradient !== undefined ? { thumbnailGradient: meta.thumbnailGradient } : {}),
     },
   };
@@ -197,6 +208,17 @@ export function loadDesignSnapshot(snapshot: DesignSnapshot): SerializableResult
   if (!isFiniteNumber(snapshot.budget)) {
     return invalidSnapshot('budget is not a finite number');
   }
+  const appearance = snapshot.appearance;
+  if (appearance === null || typeof appearance !== 'object') {
+    return invalidSnapshot('room appearance is missing');
+  }
+  if (
+    !(WALL_FINISH_IDS as readonly unknown[]).includes(appearance.wallFinishId) ||
+    !(FLOOR_FINISH_IDS as readonly unknown[]).includes(appearance.floorFinishId) ||
+    !(WALLPAPER_IDS as readonly unknown[]).includes(appearance.wallpaperId)
+  ) {
+    return invalidSnapshot('room appearance ids are invalid');
+  }
   for (let i = 0; i < snapshot.items.length; i++) {
     const item = snapshot.items[i];
     if (item === null || typeof item !== 'object') {
@@ -225,6 +247,13 @@ export function loadDesignSnapshot(snapshot: DesignSnapshot): SerializableResult
     if (item.source !== 'existing' && item.source !== 'marketplace') {
       return invalidSnapshot(`item ${i} source is invalid`);
     }
+    const variant = item.variant;
+    if (variant === null || typeof variant !== 'object') {
+      return invalidSnapshot(`item ${i} variant is missing`);
+    }
+    if (typeof variant.color !== 'string' || typeof variant.material !== 'string') {
+      return invalidSnapshot(`item ${i} variant is not valid strings`);
+    }
   }
   const duplicateId = findDuplicateInstanceId(snapshot.items);
   if (duplicateId !== undefined) {
@@ -241,6 +270,11 @@ export function loadDesignSnapshot(snapshot: DesignSnapshot): SerializableResult
       room: cloneRoomData(room),
       items: snapshot.items.map(clonePlacedFurniture),
       budget: snapshot.budget,
+      appearance: {
+        wallFinishId: appearance.wallFinishId,
+        floorFinishId: appearance.floorFinishId,
+        wallpaperId: appearance.wallpaperId,
+      },
     },
   };
 }

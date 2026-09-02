@@ -136,18 +136,6 @@ export interface FurnitureProduct {
   thumbnailGradient?: string;
 }
 
-/** A placed furniture instance in the room. */
-export interface PlacedFurniture {
-  instanceId: string;
-  productId: string;
-  position: { x: number; y: number; z: number };
-  /** Rotation in degrees. */
-  rotation: number;
-  locked: boolean;
-  /** Existing items never count toward the new budget, regardless of price. */
-  source: 'existing' | 'marketplace';
-}
-
 /** Demo budget for the first Budget Rescue scenario, USD. */
 export const DEMO_BUDGET = 700;
 

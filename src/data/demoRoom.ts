@@ -1,4 +1,5 @@
-import type { DesignSnapshot, PlacedFurniture, RoomData, RoomOpening } from '@/domain/types';
+import type { DesignSnapshot, PlacedFurniture, RoomAppearance, RoomData, RoomOpening } from '@/domain/types';
+import { DEFAULT_ROOM_APPEARANCE } from '@/data/appearance';
 import { DEFAULT_ROOM_DIMENSIONS } from '@/domain/types';
 import { DEMO_BUDGET, getProduct } from '@/data/products';
 import { PLACEMENT_ZONES } from '@/data/placementZones';
@@ -90,6 +91,7 @@ export const DEFAULT_ROOM_ITEMS: readonly PlacedFurniture[] = [
     rotation: 180,
     locked: true,
     source: 'existing',
+    variant: { color: 'linen', material: 'linen' },
   },
   {
     instanceId: 'existing-rug',
@@ -100,6 +102,7 @@ export const DEFAULT_ROOM_ITEMS: readonly PlacedFurniture[] = [
     rotation: 90,
     locked: true,
     source: 'existing',
+    variant: { color: 'ivory', material: 'wool' },
   },
   {
     instanceId: 'existing-console',
@@ -109,6 +112,7 @@ export const DEFAULT_ROOM_ITEMS: readonly PlacedFurniture[] = [
     rotation: 90,
     locked: false,
     source: 'existing',
+    variant: { color: 'walnut', material: 'walnut' },
   },
 ];
 
@@ -125,6 +129,7 @@ export const BUDGET_RESCUE_ITEMS: readonly PlacedFurniture[] = [
     rotation: 180,
     locked: true,
     source: 'existing',
+    variant: { color: 'linen', material: 'linen' },
   },
   {
     instanceId: 'existing-rug',
@@ -133,6 +138,7 @@ export const BUDGET_RESCUE_ITEMS: readonly PlacedFurniture[] = [
     rotation: 90,
     locked: true,
     source: 'existing',
+    variant: { color: 'ivory', material: 'wool' },
   },
   {
     instanceId: 'rescue-coffee-table',
@@ -142,6 +148,7 @@ export const BUDGET_RESCUE_ITEMS: readonly PlacedFurniture[] = [
     rotation: 0,
     locked: false,
     source: 'marketplace',
+    variant: { color: 'walnut', material: 'walnut' },
   },
   {
     instanceId: 'rescue-floor-lamp',
@@ -151,6 +158,7 @@ export const BUDGET_RESCUE_ITEMS: readonly PlacedFurniture[] = [
     rotation: 0,
     locked: false,
     source: 'marketplace',
+    variant: { color: 'cream', material: 'brass' },
   },
   {
     instanceId: 'rescue-accent-chair',
@@ -160,6 +168,7 @@ export const BUDGET_RESCUE_ITEMS: readonly PlacedFurniture[] = [
     rotation: 0,
     locked: false,
     source: 'marketplace',
+    variant: { color: 'terracotta', material: 'velvet' },
   },
   {
     instanceId: 'rescue-shelf',
@@ -169,6 +178,7 @@ export const BUDGET_RESCUE_ITEMS: readonly PlacedFurniture[] = [
     rotation: 0,
     locked: false,
     source: 'marketplace',
+    variant: { color: 'oak', material: 'alder' },
   },
 ];
 
@@ -179,6 +189,13 @@ export const BUDGET_RESCUE_CREATED_AT = '2026-09-01T01:00:00.000Z';
 /** Budget of the Budget Rescue scenario, USD. */
 export const BUDGET_RESCUE_BUDGET = 1000;
 
+/** Room styling of the Budget Rescue preset: warm sand walls, walnut floor, linen stripe wallpaper. */
+export const BUDGET_RESCUE_APPEARANCE: RoomAppearance = {
+  wallFinishId: 'warm-sand',
+  floorFinishId: 'walnut',
+  wallpaperId: 'linen-stripe',
+};
+
 /** Ready-to-load default demo state: furnished but incomplete, 700 budget, nothing spent.*/
 export const DEFAULT_DEMO_SNAPSHOT: DesignSnapshot = {
   id: 'snapshot-default-demo',
@@ -188,6 +205,7 @@ export const DEFAULT_DEMO_SNAPSHOT: DesignSnapshot = {
   room: DEFAULT_ROOM,
   items: DEFAULT_ROOM_ITEMS,
   budget: DEMO_BUDGET,
+  appearance: DEFAULT_ROOM_APPEARANCE,
   thumbnailGradient: 'linear-gradient(135deg, #E6DFD2, #8FA3A0)',
 };
 
@@ -200,6 +218,7 @@ export const BUDGET_RESCUE_SNAPSHOT: DesignSnapshot = {
   room: DEFAULT_ROOM,
   items: BUDGET_RESCUE_ITEMS,
   budget: BUDGET_RESCUE_BUDGET,
+  appearance: BUDGET_RESCUE_APPEARANCE,
   thumbnailGradient: 'linear-gradient(135deg, #F3E9DC, #C96F4A)',
 };
 

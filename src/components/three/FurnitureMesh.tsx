@@ -23,42 +23,10 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { FurnitureProduct, PlacedFurniture } from '@/domain/types';
+import { furnitureHex } from '@/data/appearance';
+import type { FurnitureProduct, FurnitureVariant, PlacedFurniture } from '@/domain/types';
 
 const DEG2RAD = Math.PI / 180;
-
-/** Warm modern palette keyed by the catalog color vocabulary. */
-const PALETTE: Record<string, string> = {
-  sand: '#E4D5B5',
-  ivory: '#F7F3EA',
-  charcoal: '#3A3E44',
-  sage: '#A3B18A',
-  terracotta: '#C96F4A',
-  mustard: '#E4B95B',
-  slate: '#6E7B8A',
-  cream: '#F3E9DC',
-  rust: '#B65C3C',
-  olive: '#7E8B5A',
-  blush: '#E8B4A0',
-  linen: '#EDE4D5',
-  espresso: '#4E3628',
-  oak: '#C69C6D',
-  walnut: '#6B4A32',
-  ash: '#B9C0C4',
-  beige: '#E6D9C3',
-  clay: '#B0714F',
-  forest: '#3E5C46',
-  navy: '#33415E',
-  stone: '#B9B4AB',
-  butter: '#F0D48B',
-  honey: '#D9A441',
-  mocha: '#7B5B47',
-  white: '#FBFBF9',
-  black: '#26262A',
-  moss: '#8A9A6B',
-  fern: '#5E7C54',
-  amber: '#E0A34E',
-};
 
 /** Selection ring color (mustard) and invalid ring color (terracotta). */
 const SELECT_RING_COLOR = '#E4B95B';
@@ -440,10 +408,18 @@ function buildParts(product: FurnitureProduct): Part[] {
 /* ------------------------------------------------------------------ */
 
 /** Builds the category's material list; selected items get a soft glow. */
-function buildMaterials(product: FurnitureProduct, selected: boolean): THREE.MeshStandardMaterial[] {
-  const c1 = PALETTE[product.colors[0]] ?? PALETTE.linen;
-  const c2 = PALETTE[product.colors[1]] ?? PALETTE.charcoal;
-  const finish = product.material;
+function buildMaterials(
+  product: FurnitureProduct,
+  variant: FurnitureVariant,
+  selected: boolean,
+): THREE.MeshStandardMaterial[] {
+  // The chosen colorway drives the primary finish; the accent is the first
+  // authored color that differs from it. Materials are always the authored
+  // material of the backing product.
+  const c1 = furnitureHex(variant.color);
+  const accentColor = product.colors.find((entry) => entry !== variant.color);
+  const c2 = accentColor === undefined ? '#26262A' : furnitureHex(accentColor);
+  const finish = variant.material;
   const finishRoughness =
     finish === 'velvet' || finish === 'leather' || finish === 'ceramic' || finish === 'glass'
       ? 0.34
@@ -477,43 +453,47 @@ function buildMaterials(product: FurnitureProduct, selected: boolean): THREE.Mes
   };
   switch (product.category) {
     case 'sofa':
-      return [mk(c1, 0.92), mk(c2, 0.9), mk(PALETTE.charcoal, 0.5)];
+      return [mk(c1, 0.92), mk(c2, 0.9), mk('#3A3E44', 0.5)];
     case 'armchair':
-      return [mk(c1, 0.9), mk(c2, 0.88), mk(PALETTE.charcoal, 0.6)];
+      return [mk(c1, 0.9), mk(c2, 0.88), mk('#3A3E44', 0.6)];
     case 'accent_chair':
-      return [mk(c1, 0.88), mk(c2, 0.85), mk(PALETTE.charcoal, 0.55)];
+      return [mk(c1, 0.88), mk(c2, 0.85), mk('#3A3E44', 0.55)];
     case 'coffee_table':
-      return [mk(c1, 0.5), mk(c2, 0.6), mk(PALETTE.charcoal, 0.45)];
+      return [mk(c1, 0.5), mk(c2, 0.6), mk('#3A3E44', 0.45)];
     case 'side_table':
-      return [mk(c1, 0.48), mk(c2, 0.6), mk(PALETTE.charcoal, 0.5)];
+      return [mk(c1, 0.48), mk(c2, 0.6), mk('#3A3E44', 0.5)];
     case 'console':
-      return [mk(c1, 0.5), mk(c2, 0.62), mk(PALETTE.charcoal, 0.45)];
+      return [mk(c1, 0.5), mk(c2, 0.62), mk('#3A3E44', 0.45)];
     case 'floor_lamp':
       return [mk(c1, 0.4, 0.55), mk(c1, 0.85, 0, 0.32)];
     case 'table_lamp':
-      return [mk(PALETTE.charcoal, 0.5, 0.3), mk(c1, 0.55), mk(c1, 0.8, 0, 0.3), mk('#FFE6C2', 0.6, 0, 0.85)];
+      return [mk('#3A3E44', 0.5, 0.3), mk(c1, 0.55), mk(c1, 0.8, 0, 0.3), mk('#FFE6C2', 0.6, 0, 0.85)];
     case 'rug':
       return [mk(c1, 1), mk(c2, 1)];
     case 'shelf':
       return [mk(c1, 0.55), mk(c2, 0.6)];
     case 'cabinet':
-      return [mk(c1, 0.55), mk(c2, 0.65), mk(PALETTE.charcoal, 0.5)];
+      return [mk(c1, 0.55), mk(c2, 0.65), mk('#3A3E44', 0.5)];
     case 'storage':
       return [mk(c1, 0.75), mk(c2, 0.7)];
     case 'plant':
-      return [mk(PALETTE[product.colors[1]] ?? PALETTE.terracotta, 0.6), mk(PALETTE.forest, 0.9), mk(PALETTE.mocha, 0.8)];
+      return [mk(c1, 0.6), mk(furnitureHex('forest'), 0.9), mk(furnitureHex('mocha'), 0.8)];
     case 'curtain':
-      return [mk(c1, 0.95), mk(PALETTE.charcoal, 0.45, 0.4)];
+      return [mk(c1, 0.95), mk('#3A3E44', 0.45, 0.4)];
     case 'decor':
-      return [mk(c1, 0.55), product.material === 'brass' ? mk('#E9E6DF', 0.06, 0.9) : mk(c2, 0.6), mk(PALETTE.charcoal, 0.5, 0.3)];
+      return [mk(c1, 0.55), variant.material === 'brass' ? mk('#E9E6DF', 0.06, 0.9) : mk(c2, 0.6), mk('#3A3E44', 0.5, 0.3)];
     default:
-      return [mk(c1, 0.6), mk(c2, 0.65), mk(PALETTE.charcoal, 0.5)];
+      return [mk(c1, 0.6), mk(c2, 0.65), mk('#3A3E44', 0.5)];
   }
 }
 
-/** Generates parts + materials for a product; stable until product/selection changes. */
-function buildModel(product: FurnitureProduct, selected: boolean): BuiltModel {
-  return { parts: buildParts(product), materials: buildMaterials(product, selected) };
+/** Generates parts + materials; stable until product/variant/selection changes. */
+function buildModel(
+  product: FurnitureProduct,
+  variant: FurnitureVariant,
+  selected: boolean,
+): BuiltModel {
+  return { parts: buildParts(product), materials: buildMaterials(product, variant, selected) };
 }
 
 /* ------------------------------------------------------------------ */
@@ -547,12 +527,26 @@ export function FurnitureMesh({ item, product, selected, invalid, mutationKey, o
   const mountedProductRef = useRef<string | null>(null);
   const mountedKeyRef = useRef(0);
 
-  const { parts, materials } = useMemo(() => buildModel(product, selected), [product, selected]);
+  const { parts, materials } = useMemo(
+    () => buildModel(product, item.variant, selected),
+    [item.variant, product, selected],
+  );
 
   // Keep the frame loop reading the live material list (rebuilt on
-  // product/selection changes) without allocating per frame.
+  // product/variant/selection changes) without allocating per frame.
   useLayoutEffect(() => {
     matsRef.current = materials;
+  }, [materials]);
+
+  // Dispose replaced materials so variant restores, replacements, and
+  // selection changes never accumulate GPU resources.
+  useLayoutEffect(() => {
+    const current = materials;
+    return () => {
+      for (const material of current) {
+        material.dispose();
+      }
+    };
   }, [materials]);
 
   // Detect a fresh instance or a replacement: pop it in and snap position,

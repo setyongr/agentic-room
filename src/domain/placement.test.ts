@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { moveProduct, removeProduct, replaceProduct, rotateProduct } from '@/domain/placement';
+import { DEFAULT_ROOM } from '@/data/demoRoom';
+import {
+  moveProduct,
+  placeProduct,
+  removeProduct,
+  replaceProduct,
+  rotateProduct,
+  setItemLocked,
+} from '@/domain/placement';
 import type { PlacedFurniture } from '@/domain/types';
 
 /**
@@ -15,6 +23,7 @@ function buildItems(): readonly PlacedFurniture[] {
       rotation: 180,
       locked: true,
       source: 'existing',
+      variant: { color: 'linen', material: 'linen' },
     },
     {
       instanceId: 'market-lamp',
@@ -23,6 +32,7 @@ function buildItems(): readonly PlacedFurniture[] {
       rotation: 0,
       locked: false,
       source: 'marketplace',
+      variant: { color: 'cream', material: 'brass' },
     },
   ];
 }
@@ -95,5 +105,90 @@ describe('locked items', () => {
     expect(item.rotation).toBe(90);
     expect(item.locked).toBe(true);
     expect(item.source).toBe('existing');
+  });
+});
+
+describe('placeProduct variants', () => {
+  it('resolves the catalog default variant when none is requested', () => {
+    const result = placeProduct('budget-rescue-lamp-premium', DEFAULT_ROOM, [], { x: 0, z: 0 });
+    if (!result.ok) throw new Error(`expected placement to succeed: ${result.code}`);
+    expect(result.data.item.variant).toEqual({ color: 'cream', material: 'brass' });
+  });
+
+  it('stores an authored color and material pair', () => {
+    const items: readonly PlacedFurniture[] = [];
+    const result = placeProduct('budget-rescue-lamp-premium', DEFAULT_ROOM, items, {
+      x: 0,
+      z: 0,
+      variant: { color: 'honey', material: 'brass' },
+    });
+    if (!result.ok) throw new Error(`expected placement to succeed: ${result.code}`);
+    expect(result.data.item.variant).toEqual({ color: 'honey', material: 'brass' });
+    expect(items).toHaveLength(0); // caller-owned input untouched
+  });
+
+  it('rejects an unavailable color with invalid_variant and available details', () => {
+    const items = buildItems();
+    const result = placeProduct('budget-rescue-lamp-premium', DEFAULT_ROOM, items, {
+      x: 0,
+      z: 0,
+      variant: { color: 'lime', material: 'brass' },
+    });
+    if (result.ok) throw new Error('expected invalid color to fail');
+    expect(result.code).toBe('invalid_variant');
+    expect(result.details?.productId).toBe('budget-rescue-lamp-premium');
+    expect(result.details?.availableColors).toEqual(['cream', 'honey']);
+    expect(result.details?.availableMaterials).toEqual(['brass']);
+    expect(items).toHaveLength(2); // unchanged
+  });
+
+  it('rejects a mismatched material with invalid_variant', () => {
+    const result = placeProduct('budget-rescue-lamp-premium', DEFAULT_ROOM, [], {
+      x: 0,
+      z: 0,
+      variant: { color: 'cream', material: 'plastic' },
+    });
+    if (result.ok) throw new Error('expected mismatched material to fail');
+    expect(result.code).toBe('invalid_variant');
+    expect(result.details?.availableMaterials).toEqual(['brass']);
+  });
+});
+
+describe('variant preservation', () => {
+  it('preserves the variant across move, rotate, and lock changes', () => {
+    const items = buildItems();
+    const expected = { color: 'cream', material: 'brass' };
+
+    const moved = moveProduct('market-lamp', items, 2, 2);
+    if (!moved.ok) throw new Error('expected move to succeed');
+    expect(moved.data.item.variant).toEqual(expected);
+
+    const rotated = rotateProduct('market-lamp', items, 90);
+    if (!rotated.ok) throw new Error('expected rotation to succeed');
+    expect(rotated.data.item.variant).toEqual(expected);
+
+    const locked = setItemLocked('market-lamp', items, true);
+    if (!locked.ok) throw new Error('expected lock to succeed');
+    expect(locked.data.item.variant).toEqual(expected);
+    expect(items.map((item) => item.variant)).toEqual([
+      { color: 'linen', material: 'linen' },
+      { color: 'cream', material: 'brass' },
+    ]);
+  });
+
+  it('keeps the color when the replacement offers it, with the replacement material', () => {
+    const items = buildItems();
+    const result = replaceProduct('market-lamp', items, 'budget-rescue-lamp-value');
+    if (!result.ok) throw new Error(`expected replacement to succeed: ${result.code}`);
+    expect(result.data.item.productId).toBe('budget-rescue-lamp-value');
+    expect(result.data.item.variant).toEqual({ color: 'cream', material: 'steel' });
+  });
+
+  it('resets to the replacement first color when the old color is unavailable', () => {
+    const items = buildItems();
+    const result = replaceProduct('market-lamp', items, 'arc-dome-floor-lamp');
+    if (!result.ok) throw new Error(`expected replacement to succeed: ${result.code}`);
+    expect(result.data.item.productId).toBe('arc-dome-floor-lamp');
+    expect(result.data.item.variant).toEqual({ color: 'mustard', material: 'steel' });
   });
 });

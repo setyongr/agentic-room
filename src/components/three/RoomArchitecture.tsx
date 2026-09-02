@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import type { RoomData, RoomDimensions, RoomOpening, ValidationIssue, WallSide } from '@/domain/types';
+import { resolveAppearance, type FloorFinishOption, type WallpaperOption } from '@/data/appearance';
+import type { RoomAppearance, RoomData, RoomDimensions, RoomOpening, ValidationIssue, WallSide } from '@/domain/types';
 import { WALL_SIDES } from '@/domain/types';
 
 /**
@@ -24,6 +25,10 @@ import { WALL_SIDES } from '@/domain/types';
  * southeast quadrant — sees the interior furniture instead of opaque
  * panels; those openings keep their full frames, glass, sills/thresholds,
  * and clearance inlays, and the north/west walls stay full-height.
+ *
+ * Wall, floor, and baseboard colors (plus optional wallpaper) come from
+ * the room appearance: every texture and material is painted once per
+ * appearance from authored primitives — no assets, no randomness.
  */
 
 const DEFAULT_WALL_THICKNESS = 0.2;
@@ -110,6 +115,7 @@ interface Cut {
 
 interface RoomMaterials {
   floorTexture: THREE.CanvasTexture;
+  wallpaperTexture: THREE.CanvasTexture | null;
   floor: THREE.MeshStandardMaterial;
   wall: THREE.MeshStandardMaterial;
   baseboard: THREE.MeshStandardMaterial;
@@ -147,11 +153,11 @@ function wallPerp(side: WallSide, width: number, depth: number): number {
 }
 
 /**
- * Cool light-slate floor finish painted once into a canvas texture. Staggered
- * boards and a quiet perimeter joint make the floor read as a material rather
- * than a planning grid, while keeping the render to one texture and no assets.
+ * Deterministic floor finish painted once into a canvas texture: staggered
+ * boards (plank finishes) or a clean square grid (tile finishes) in the
+ * authored base/seam colors. One texture, no assets.
  */
-function createFloorTexture(width: number, depth: number): THREE.CanvasTexture {
+function createFloorTexture(width: number, depth: number, floor: FloorFinishOption): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(2, Math.round(width * FLOOR_TEX_PPM));
   canvas.height = Math.max(2, Math.round(depth * FLOOR_TEX_PPM));
@@ -159,27 +165,39 @@ function createFloorTexture(width: number, depth: number): THREE.CanvasTexture {
   if (!ctx) {
     throw new Error('RoomArchitecture: 2D canvas context unavailable');
   }
-  ctx.fillStyle = '#cbd5e1';
+  ctx.fillStyle = floor.base;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const board = GRID_TILE_METERS * FLOOR_TEX_PPM;
-  ctx.strokeStyle = 'rgba(71, 85, 105, 0.2)';
+  ctx.strokeStyle = floor.seam;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  for (let y = board; y < canvas.height; y += board) {
-    ctx.moveTo(0, y + 0.5);
-    ctx.lineTo(canvas.width, y + 0.5);
-  }
-  for (let row = 0, y = 0; y < canvas.height; row += 1, y += board) {
-    const offset = row % 2 === 0 ? board / 2 : 0;
-    for (let x = offset; x < canvas.width; x += board) {
-      ctx.moveTo(x + 0.5, y);
-      ctx.lineTo(x + 0.5, Math.min(y + board, canvas.height));
+  if (floor.pattern === 'plank') {
+    for (let y = board; y < canvas.height; y += board) {
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(canvas.width, y + 0.5);
+    }
+    for (let row = 0, y = 0; y < canvas.height; row += 1, y += board) {
+      const plankLength = board * 3;
+      const offset = row % 2 === 0 ? plankLength / 2 : 0;
+      for (let x = offset; x < canvas.width; x += plankLength) {
+        ctx.moveTo(x + 0.5, y);
+        ctx.lineTo(x + 0.5, Math.min(y + board, canvas.height));
+      }
+    }
+  } else {
+    for (let x = board; x < canvas.width; x += board) {
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, canvas.height);
+    }
+    for (let y = board; y < canvas.height; y += board) {
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(canvas.width, y + 0.5);
     }
   }
   ctx.stroke();
 
-  ctx.strokeStyle = 'rgba(71, 85, 105, 0.3)';
+  ctx.strokeStyle = floor.seam;
   ctx.lineWidth = 2;
   ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
 
@@ -189,18 +207,121 @@ function createFloorTexture(width: number, depth: number): THREE.CanvasTexture {
   return texture;
 }
 
-function createRoomMaterials({ width, depth }: RoomDimensions): RoomMaterials {
-  const floorTexture = createFloorTexture(width, depth);
+/**
+ * Deterministic wallpaper pattern painted once at 256×256 and repeated over
+ * the walls. `none` returns null so the wall renders as plain paint.
+ */
+function createWallpaperTexture(wallpaper: WallpaperOption, wallColor: string): THREE.CanvasTexture | null {
+  if (wallpaper.pattern === 'none') {
+    return null;
+  }
+  const SIZE = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('RoomArchitecture: 2D canvas context unavailable');
+  }
+  ctx.fillStyle = wallColor;
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  const ink = wallpaper.ink ?? 'rgba(100, 116, 139, 0.25)';
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = ink;
+
+  if (wallpaper.pattern === 'stripe') {
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    for (let x = 12; x < SIZE; x += 32) {
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, SIZE);
+    }
+    ctx.stroke();
+  } else if (wallpaper.pattern === 'botanical') {
+    // One stem-and-leaves sprig per 64px column, mirrored per row.
+    ctx.lineWidth = 3;
+    for (let column = 0; column < 4; column += 1) {
+      const cx = column * 64 + 32;
+      for (let row = 0; row < 4; row += 1) {
+        const baseY = row * 64 + 16;
+        ctx.beginPath();
+        ctx.moveTo(cx, baseY + 48);
+        ctx.quadraticCurveTo(cx + (row % 2 === 0 ? 8 : -8), baseY + 28, cx, baseY + 8);
+        ctx.stroke();
+        for (let leaf = 0; leaf < 3; leaf += 1) {
+          const ly = baseY + 12 + leaf * 12;
+          ctx.beginPath();
+          ctx.ellipse(cx + (leaf % 2 === 0 ? 14 : -14), ly, 10, 3.5, leaf % 2 === 0 ? -0.5 : 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  } else {
+    // arched-geo: overlapping arch outlines, two per row.
+    ctx.lineWidth = 5;
+    for (let row = 0; row < 2; row += 1) {
+      const baseY = row * 128 + 96;
+      for (let column = 0; column < 2; column += 1) {
+        const cx = column * 128 + 64;
+        ctx.beginPath();
+        ctx.moveTo(cx - 40, baseY);
+        ctx.lineTo(cx - 40, baseY - 34);
+        ctx.arc(cx, baseY - 34, 40, Math.PI, 0, false);
+        ctx.lineTo(cx + 40, baseY);
+        ctx.stroke();
+      }
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4, 2);
+  texture.anisotropy = 8;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Use room coordinates so wallpaper keeps its scale across doorway cuts and low walls. */
+function mapWallpaperUvs(geometry: THREE.BoxGeometry, box: RoomBox): void {
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const uv = geometry.getAttribute('uv');
+  for (let i = 0; i < position.count; i += 1) {
+    const x = position.getX(i) + box.x;
+    const y = position.getY(i) + box.y;
+    const z = position.getZ(i) + box.z;
+    const horizontal = Math.abs(normal.getX(i)) > 0.5 ? z : x;
+    const vertical = Math.abs(normal.getY(i)) > 0.5 ? z : y;
+    uv.setXY(i, horizontal / 6, vertical / 2.8);
+  }
+  uv.needsUpdate = true;
+}
+
+function createRoomMaterials(
+  { width, depth }: RoomDimensions,
+  appearance: RoomAppearance,
+): RoomMaterials {
+  const { wall, floor, wallpaper } = resolveAppearance(appearance);
+  const floorTexture = createFloorTexture(width, depth, floor);
+  const wallpaperTexture = createWallpaperTexture(wallpaper, wall.wall);
+  const wallOptions: THREE.MeshStandardMaterialParameters = {
+    roughness: 0.97,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  };
+  if (wallpaperTexture === null) {
+    wallOptions.color = wall.wall;
+  } else {
+    wallOptions.map = wallpaperTexture;
+    wallOptions.color = new THREE.Color('#ffffff');
+  }
   return {
     floorTexture,
+    wallpaperTexture,
     floor: new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.88, metalness: 0 }),
-    wall: new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      roughness: 0.97,
-      metalness: 0,
-      side: THREE.DoubleSide,
-    }),
-    baseboard: new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.88, metalness: 0 }),
+    wall: new THREE.MeshStandardMaterial(wallOptions),
+    baseboard: new THREE.MeshStandardMaterial({ color: wall.trim, roughness: 0.88, metalness: 0 }),
     frame: new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.62, metalness: 0.04 }),
     stone: new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.8, metalness: 0 }),
     glass: new THREE.MeshStandardMaterial({
@@ -343,17 +464,22 @@ function buildRoomGeometry(room: RoomData): RoomGeometry {
 
 export interface RoomArchitectureProps {
   room: RoomData;
+  appearance: RoomAppearance;
   issues: readonly ValidationIssue[];
 }
 
 /**
  * Renders the room shell: floor, walls with real openings, baseboards,
- * frames/glass, and clearance inlays. Receives shadows from the scene's
- * lights; the enclosing Canvas owns lighting and camera.
+ * frames/glass, and clearance inlays, styled by the current room
+ * appearance. Receives shadows from the scene's lights; the enclosing
+ * Canvas owns lighting and camera.
  */
-export function RoomArchitecture({ room, issues }: RoomArchitectureProps) {
+export function RoomArchitecture({ room, appearance, issues }: RoomArchitectureProps) {
   const geometry = useMemo(() => buildRoomGeometry(room), [room]);
-  const materials = useMemo(() => createRoomMaterials(room.dimensions), [room.dimensions]);
+  const materials = useMemo(
+    () => createRoomMaterials(room.dimensions, appearance),
+    [appearance, room.dimensions],
+  );
 
   // Opening ids whose clearance is currently blocked by a validation issue.
   const blockedOpenings = useMemo(() => {
@@ -366,11 +492,12 @@ export function RoomArchitecture({ room, issues }: RoomArchitectureProps) {
     return set;
   }, [issues]);
 
-  // Dispose the canvas texture and materials we created outside JSX.
+  // Dispose the canvas textures and materials we created outside JSX.
   useEffect(() => {
     const mats = materials;
     return () => {
       mats.floorTexture.dispose();
+      if (mats.wallpaperTexture !== null) mats.wallpaperTexture.dispose();
       mats.floor.dispose();
       mats.wall.dispose();
       mats.baseboard.dispose();
@@ -409,7 +536,10 @@ export function RoomArchitecture({ room, issues }: RoomArchitectureProps) {
             receiveShadow={!isGlass}
             material={materials[MATERIAL_FOR[box.kind]]}
           >
-            <boxGeometry args={[box.w, box.h, box.d]} />
+            <boxGeometry
+              args={[box.w, box.h, box.d]}
+              onUpdate={box.kind === 'wall' || box.kind === 'lintel' ? (geometry) => mapWallpaperUvs(geometry, box) : undefined}
+            />
           </mesh>
         );
       })}

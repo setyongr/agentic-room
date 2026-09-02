@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from 'react';
 import { FolderOpen, Plus, RotateCcw, Save, ShoppingBag, Sparkles } from 'lucide-react';
+import { appearancePreviewGradient, resolveAppearance } from '@/data/appearance';
 import { getProductById } from '@/domain/catalog';
 import { selectCartCount, selectCartTotal } from '@/store/selectors';
 import { useRoomStore } from '@/store/roomStore';
@@ -141,6 +142,18 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-text">{design.name}</p>
                       <p className="mt-0.5 text-xs text-text-muted">{design.items.length} pieces · {money(design.budget)} budget</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
+                        <span
+                          aria-hidden="true"
+                          className="inline-block size-3.5 shrink-0 rounded-control border border-border"
+                          style={{ background: appearancePreviewGradient(design.appearance) }}
+                        />
+                        <span className="truncate">
+                          {resolveAppearance(design.appearance).wall.name} ·{' '}
+                          {resolveAppearance(design.appearance).floor.name} ·{' '}
+                          {resolveAppearance(design.appearance).wallpaper.name}
+                        </span>
+                      </p>
                     </div>
                     <button type="button" onClick={() => restoreDesign(design.id, design.name)} className="min-h-11 shrink-0 rounded-control px-3 text-sm font-semibold text-accent-strong transition-colors hover:bg-accent-soft focus:outline-none focus:ring-2 focus:ring-focus-ring motion-reduce:transition-none">
                       Load

@@ -194,6 +194,7 @@ describe('addToCart', () => {
       rotation: 0,
       locked: false,
       source: 'marketplace',
+      variant: { color: 'ghost', material: 'unknown' },
     };
     const error = expectRejected(addToCart(BASE_CART, ['ghost-lamp'], [ghostItem], makeMeta()));
     expect(error.code).toBe('cart_add_rejected');

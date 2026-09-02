@@ -11,7 +11,7 @@ adds lifecycle, envelope, error, and boundary detail.
 ## 1. Overview
 
 The page is its own MCP server — no binary, daemon, or backend. It registers
-**19 tools** (9 reads, 10 mutations) against Chrome's in-browser Model
+**20 tools** (9 reads, 11 mutations) against Chrome's in-browser Model
 Context API. The human UI and the tools drive the same Zustand store; a tool
 call is indistinguishable from a click except for `origin: 'agent'`, which is
 what makes the completed action visible in the activity feed.
@@ -24,7 +24,7 @@ Implementation files:
 | `src/webmcp/registerTools.ts` | `registerRoomTools()` — detection, registration, unregistration, dev-only warnings. |
 | `src/webmcp/serialize.ts` | Result envelope helpers, input readers (string/number/object/array), per-tool parsing. |
 | `src/webmcp/tools/readTools.ts` | The 9 read tools. |
-| `src/webmcp/tools/mutationTools.ts` | The 10 mutation tools. |
+| `src/webmcp/tools/mutationTools.ts` | The 11 mutation tools. |
 
 ## 2. Availability and registration lifecycle
 
@@ -85,15 +85,15 @@ Every tool result is a JSON object with a `success` discriminant:
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
-| `get_room_state` | Room dimensions/openings, every placed item (id, name, category, extents, position, rotation, locked, source, budget price), budget, live pricing, live validation, last saved design name | — |
+| `get_room_state` | Room dimensions/openings, room appearance (wall/floor/wallpaper ids), every placed item (id, name, category, extents, position, rotation, locked, source, budget price, color/material variant), budget, live pricing, live validation, last saved design name | — |
 | `get_available_placement_zones` | Zones accepting `category` with capacity left: footprints, occupancy, remaining | `category` (enum) |
 | `search_products` | Deterministic catalog search: free-text + category/style/color/material/price filters, dimension window (`maxWidth`/`maxDepth`), sort, paging | `query`, `category`, `styles`, `colors`, `materials`, `minPrice`, `maxPrice`, `inStockOnly`, `sort`, `maxWidth`, `maxDepth`, `page`, `pageSize` |
-| `get_product` | Full catalog record for one product + its placed instances | `productId` |
+| `get_product` | Full catalog record for one product + compatible placement zones (`{id,name,kind}[]`) + its placed instances | `productId` |
 | `check_layout` | Re-run validation → `valid`, `issueCount`, every issue (kind/severity/message/instances) | — |
 | `calculate_total` | Budget breakdown: per-item lines, marketplace/existing/grand totals, signed remaining, over-budget flag | — |
 | `get_budget_pressure` | `under_budget | at_budget | over_budget`, `amountOver`, replaceable marketplace items sorted most-expensive-first | — |
 | `find_cheaper_alternatives` | Cheaper, in-stock, same-category candidates for one placed marketplace item, ranked by compatibility then savings, with scores | `instanceId`, `targetPrice?`, `maxResults?` |
-| `get_saved_designs` | Session designs, newest first: name, id, item count, budget, marketplace total at save time | — |
+| `get_saved_designs` | Session designs, newest first: name, id, item count, budget, marketplace total and room appearance at save time | — |
 
 Read annotations: `readOnlyHint`, no feed-logging of arguments. Read-only
 calls still append *completion* entries ("Inspected the room: …",
@@ -101,19 +101,20 @@ calls still append *completion* entries ("Inspected the room: …",
 feed because the feed observes agent activity, not state changes — those
 templates never contain query text or other free-form content.
 
-## 5. Mutation tools (10) — same store actions as the UI, `origin: 'agent'`
+## 5. Mutation tools (11) — same store actions as the UI, `origin: 'agent'`
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
-| `place_product` | Add a product. `zoneId` places at the zone center with category/capacity/footprint enforcement; `position {x, z}` places explicitly. Schema requires **exactly one** of `zoneId`/`position` (`oneOf`). Returns the item + refreshed pricing/layout | `productId`, `zoneId` **or** `position`, `rotation?` |
+| `place_product` | Add a product. `zoneId` places at the zone center with category/capacity/footprint enforcement; `position {x, z}` places explicitly. Schema requires **exactly one** of `zoneId`/`position` (`oneOf`). Optional `color`/`material` select the visual variant (defaults: first authored color + authored material); unknown colors/materials fail with `invalid_variant`. Returns the item (with its stored variant) + refreshed pricing/layout | `productId`, `zoneId` **or** `position`, `rotation?`, `color?`, `material?` |
 | `move_product` | Move an item to new x/z (locked items may move; geometry is not re-checked — validation refreshes immediately after) | `instanceId`, `position {x, z}` |
 | `rotate_product` | Set yaw degrees; normalized to [0, 360) | `instanceId`, `rotation` |
 | `remove_product` | Remove an item (destructive hint; locked → `item_locked`) | `instanceId` |
 | `set_item_locked` | Lock/unlock; locked rejects remove/replace but allows move/rotate. Setting the current value is a success no-op | `instanceId`, `locked` |
 | `set_budget` | Budget ≥ 0; refreshes the budget validation + pricing immediately | `budget` |
-| `replace_product` | Swap the product behind an item: same category, in stock, unlocked. Preserves `instanceId`/position/rotation/source. Returns `savings` (negative when pricier) + refreshed layout/pricing | `instanceId`, `replacementProductId` |
-| `save_design` | Capture the live design as a named snapshot; returns the design summary | `name`, `thumbnailGradient?` |
-| `load_design` | Restore a session design (destructive: current design is discarded; unknown id → `design_not_found`) | `designId` |
+| `set_room_appearance` | Style the room (visual only; pricing/layout untouched). Either `preset: "default"` or all three explicit finish ids; mixed/partial inputs fail with `invalid_args`. Returns the resolved appearance + layout | `preset` **or** `wallFinishId` + `floorFinishId` + `wallpaperId` |
+| `replace_product` | Swap the product behind an item: same category, in stock, unlocked. Preserves `instanceId`/position/rotation/source; keeps the current color when the replacement offers it, else resets to the replacement's first color, always with the replacement's material. Returns `savings` (negative when pricier) + refreshed layout/pricing | `instanceId`, `replacementProductId` |
+| `save_design` | Capture the live design (room, items with variants, room appearance) as a named snapshot; returns the design summary incl. appearance | `name`, `thumbnailGradient?` |
+| `load_design` | Restore a session design incl. room appearance and item variants (destructive: current design is discarded; unknown id → `design_not_found`); restored block includes appearance | `designId` |
 | `add_to_cart` | Add placed marketplace instances at catalog prices; all-or-nothing — any unknown/existing/already-carted instance rejects the whole request | `instanceIds` (array) |
 
 Each successful mutation returns the store's refreshed `pricing` and
@@ -140,6 +141,8 @@ unchanged. Codes exercised by the test suite and demo workflows:
 | `invalid_snapshot` | Snapshot shape is corrupt and cannot be restored. |
 | `cart_checked_out` | Cart is no longer accepting items. |
 | `cart_add_rejected` | Some requested instances could not be added (details list the rejections). |
+| `invalid_variant` | Place/replace requested a color not offered by the product or a mismatched material (details: `requestedVariant`, `availableColors`, `availableMaterials`). |
+| `invalid_room_appearance` | Appearance update referenced an unknown finish/wallpaper id (details: `field`, `value`, `allowedValues`). |
 
 Zone placement can also fail with placement-specific codes defined in
 `src/domain/placement.ts` (category disallowed, zone capacity/footprint
@@ -174,7 +177,7 @@ bun install
 bun run dev              # http://localhost:3000
 # DevTools console → confirm availability, then:
 const mc = document.modelContext ?? navigator.modelContext;
-await mc.getTools();     // expect 19 registered names
+await mc.getTools();     // expect 20 registered names
 ```
 
 Then run the driver snippet from README ("Testing the WebMCP integration in

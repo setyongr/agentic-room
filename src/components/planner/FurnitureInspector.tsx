@@ -11,6 +11,7 @@ import {
   UnlockKeyhole,
 } from 'lucide-react';
 
+import { furnitureHex } from '@/data/appearance';
 import { selectSelectedItem, selectSelectedProduct } from '@/store/selectors';
 import { useRoomStore } from '@/store/roomStore';
 
@@ -242,6 +243,19 @@ export function FurnitureInspector() {
                     {selectedProduct
                       ? `${coordinate(selectedProduct.width)} W × ${coordinate(selectedProduct.depth)} D × ${coordinate(selectedProduct.height)} H m`
                       : 'Product details unavailable'}
+                  </dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-text-muted">Finish</dt>
+                  <dd className="mt-0.5 flex items-center gap-1.5 font-medium text-text">
+                    <span
+                      aria-hidden="true"
+                      className="inline-block size-3 shrink-0 rounded-pill border border-border"
+                      style={{ background: furnitureHex(selectedItem.variant.color) }}
+                    />
+                    <span className="capitalize">
+                      {selectedItem.variant.color} · {selectedItem.variant.material}
+                    </span>
                   </dd>
                 </div>
                 <div>

@@ -20,6 +20,7 @@
  *   missing_product / out_of_stock / zone_not_found / zone_mismatch /
  *   zone_full / does_not_fit / missing_position / conflicting_options /
  *   duplicate_instance_id / item_not_found / item_locked / category_mismatch
+ *   / invalid_variant
  */
 
 import { PRODUCTS } from '@/data/products';
@@ -27,6 +28,7 @@ import type {
   FurnitureCategory,
   FurnitureProduct,
   FurnitureSource,
+  FurnitureVariant,
   PlacedFurniture,
   PlacementZone,
   RectFootprint,
@@ -319,6 +321,12 @@ export interface PlaceProductOptions {
   instanceId?: string;
   /** provenance of the new item; defaults to "marketplace" */
   source?: FurnitureSource;
+  /**
+   * Chosen visual finish. Omitted fields resolve to the product's first
+   * color and authored material; an invalid color/material fails with
+   * `invalid_variant` before anything is placed.
+   */
+  variant?: Partial<FurnitureVariant>;
 }
 
 /** Result payload of placement mutations: the new items and the affected item. */
@@ -340,7 +348,7 @@ export function placeProduct(
   items: readonly PlacedFurniture[],
   options: PlaceProductOptions = {},
 ): SerializableResult<PlacementMutationResult> {
-  const { zoneId, x, z, rotation, instanceId, source } = options;
+  const { zoneId, x, z, rotation, instanceId, source, variant } = options;
   const hasZone = zoneId !== undefined;
   const hasPosition = x !== undefined || z !== undefined;
   if (hasZone && hasPosition) {
@@ -355,6 +363,28 @@ export function placeProduct(
   if (product.stock <= 0) {
     return fail('out_of_stock', `"${product.name}" is out of stock and cannot be placed.`, {
       productId,
+    });
+  }
+  const variantColor = variant?.color ?? product.colors[0];
+  const variantMaterial = variant?.material ?? product.material;
+  const requestedVariant: Record<string, string> = {
+    ...(variant?.color !== undefined ? { color: variant.color } : {}),
+    ...(variant?.material !== undefined ? { material: variant.material } : {}),
+  };
+  if (variantColor === undefined || !product.colors.includes(variantColor)) {
+    return fail('invalid_variant', `"${variantColor ?? ''}" is not an available color for "${product.name}".`, {
+      productId,
+      requestedVariant,
+      availableColors: product.colors,
+      availableMaterials: [product.material],
+    });
+  }
+  if (variantMaterial !== product.material) {
+    return fail('invalid_variant', `"${variantMaterial}" is not the material of "${product.name}".`, {
+      productId,
+      requestedVariant,
+      availableColors: product.colors,
+      availableMaterials: [product.material],
     });
   }
   const yaw = normalizeRotation(rotation ?? product.defaultRotation ?? 0);
@@ -388,6 +418,7 @@ export function placeProduct(
     rotation: yaw,
     locked: false,
     source: source ?? 'marketplace',
+    variant: { color: variantColor, material: variantMaterial },
   };
   const updated = items.slice();
   updated.push(item);
@@ -437,6 +468,7 @@ export function moveProduct(
     rotation: current.rotation,
     locked: current.locked,
     source: current.source,
+    variant: { color: current.variant.color, material: current.variant.material },
   };
   const updated = items.slice();
   updated[index] = moved;
@@ -524,7 +556,9 @@ export interface ReplaceProductResult extends PlacementMutationResult {
 /**
  * Replace the product backing an item. The replacement must exist, be in
  * stock, and share the item's current category. The item keeps its
- * instanceId, center position, rotation, and source. Locked items cannot be
+ * instanceId, center position, rotation, and source, and its variant color
+ * when the replacement offers it (otherwise the replacement's first
+ * color), always with the replacement's material. Locked items cannot be
  * replaced.
  */
 export function replaceProduct(
@@ -581,6 +615,10 @@ export function replaceProduct(
     rotation: current.rotation,
     locked: false,
     source: current.source,
+    variant: {
+      color: replacement.colors.includes(current.variant.color) ? current.variant.color : (replacement.colors[0] ?? 'linen'),
+      material: replacement.material,
+    },
   };
   const updated = items.slice();
   updated[index] = replaced;

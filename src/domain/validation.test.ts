@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BALCONY_DOOR, DEFAULT_ROOM, EAST_WINDOW, ENTRY_DOOR } from '@/data/demoRoom';
+import { PRODUCTS } from '@/data/products';
 import type { PlacedFurniture } from '@/domain/types';
 import { checkLayout } from '@/domain/validation';
 
@@ -20,6 +21,7 @@ function placed(
   z: number,
   rotation = 0,
 ): PlacedFurniture {
+  const product = PRODUCTS.find((entry) => entry.id === productId);
   return {
     instanceId,
     productId,
@@ -27,6 +29,7 @@ function placed(
     rotation,
     locked: false,
     source: 'marketplace',
+    variant: { color: product?.colors[0] ?? 'linen', material: product?.material ?? 'linen' },
   };
 }
 

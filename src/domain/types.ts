@@ -42,6 +42,48 @@ export const FURNITURE_SOURCES = ['existing', 'marketplace'] as const;
 /** Provenance of a placed furniture item. */
 export type FurnitureSource = (typeof FURNITURE_SOURCES)[number];
 
+/* ------------------------------------------------------------------ */
+/* Furniture variants and room appearance                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Visual finish of a placed furniture instance. The color must be one of
+ * the backing product's authored colors; the material is the product's
+ * authored material. Variants are purely cosmetic — price, stock,
+ * geometry, validation, and budget never depend on them.
+ */
+export interface FurnitureVariant {
+  /** catalog color name (member of the backing product's `colors`) */
+  color: string;
+  /** catalog material name (the backing product's `material`) */
+  material: string;
+}
+
+/** Stable wall finish identifiers, shared by the store, snapshots, and tools. */
+export const WALL_FINISH_IDS = ['gallery-white', 'warm-sand', 'soft-sage', 'clay-plaster'] as const;
+
+/** Wall finish identifier. */
+export type WallFinishId = (typeof WALL_FINISH_IDS)[number];
+
+/** Stable floor finish identifiers, shared by the store, snapshots, and tools. */
+export const FLOOR_FINISH_IDS = ['natural-oak', 'white-oak', 'walnut', 'slate-tile'] as const;
+
+/** Floor finish identifier. */
+export type FloorFinishId = (typeof FLOOR_FINISH_IDS)[number];
+
+/** Stable wallpaper choices, shared by the store, snapshots, and tools. */
+export const WALLPAPER_IDS = ['none', 'linen-stripe', 'botanical-line', 'arched-geo'] as const;
+
+/** Wallpaper identifier; "none" means plain painted walls. */
+export type WallpaperId = (typeof WALLPAPER_IDS)[number];
+
+/** The current visual styling of the room shell. */
+export interface RoomAppearance {
+  wallFinishId: WallFinishId;
+  floorFinishId: FloorFinishId;
+  wallpaperId: WallpaperId;
+}
+
 /**
  * The four walls of the room in the centered coordinate system:
  * north wall at z = -depth/2, south at z = +depth/2,
@@ -118,6 +160,7 @@ export const ACTIVITY_TYPES = [
   'cart_item_added',
   'checkout_completed',
   'budget_updated',
+  'room_appearance_updated',
 ] as const;
 
 /** Kind of an activity feed entry. */
@@ -227,6 +270,8 @@ export interface PlacedFurniture {
   locked: boolean;
   /** existing = part of the room from the start; marketplace = added by the user */
   source: FurnitureSource;
+  /** chosen visual finish (color from the product's colors, its authored material) */
+  variant: FurnitureVariant;
 }
 
 /* ------------------------------------------------------------------ */
@@ -479,6 +524,8 @@ export interface DesignSnapshot {
   items: readonly PlacedFurniture[];
   /** budget at snapshot time */
   budget: number;
+  /** room styling at snapshot time */
+  appearance: RoomAppearance;
   /** CSS gradient string for the snapshot thumbnail */
   thumbnailGradient?: string;
 }

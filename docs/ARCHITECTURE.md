@@ -12,7 +12,7 @@ the invariants reviewers should hold the code to.
 
 1. **One source of truth.** All state — room geometry, furniture, budget,
    pricing, validation, saved designs, cart, activity feed — lives in a
-   single Zustand store (`src/store/roomStore.ts`). The human UI and the 19
+   single Zustand store (`src/store/roomStore.ts`). The human UI and the 20
    WebMCP tools are two front-ends over the same store actions. There is no
    server state and no duplicated algorithm.
 2. **Pure, deterministic domain.** `src/domain/*` contains pure functions
@@ -44,10 +44,12 @@ src/
   components/
     WebMcpProvider.tsx  Mounts the Model Context registry once (client effect)
     planner/            UI shell + secondary surfaces (see §6)
-    marketplace/        MarketplacePanel — catalog sidebar content
+    marketplace/        MarketplacePanel — catalog + room-finish sidebar content
     three/              React Three Fiber scene (see §8)
   data/
     products.ts         78 hand-authored products, category/style/color lists
+    appearance.ts       Room styling registry: wall/floor/wallpaper options,
+                        furniture color-to-hex map, appearance previews
     placementZones.ts   10 named zones with footprints, categories, hints
     demoRoom.ts         Default demo preset + Budget Rescue preset snapshots
   domain/
@@ -59,9 +61,10 @@ src/
     pricing.ts          Marketplace-only budget math + budget pressure
     alternatives.ts     Cheaper-compatible-alternative ranking
     designs.ts          Snapshot capture/restore (deep, validated copies)
+    appearance.ts       Room appearance updates (visual-only styling state)
     cart.ts             Marketplace-only cart rules
     activity.ts         Activity feed model: types, templates, bounds
-    *.test.ts           Colocated Vitest suites (6 files, 39 tests)
+    *.test.ts           Colocated Vitest suites (7 files, 54 tests)
   store/
     roomStore.ts        The Zustand store: state, actions, commit pipeline
     selectors.ts        Stable derived selectors (selected item, totals, …)
@@ -70,7 +73,7 @@ src/
     registerTools.ts    Feature detection + registration/unregistration
     serialize.ts        Result envelopes, read helpers, argument parsing
     tools/readTools.ts      9 read tools
-    tools/mutationTools.ts  10 mutation tools
+    tools/mutationTools.ts  11 mutation tools
 ```
 
 ## 3. Data model (`src/domain/types.ts`)
@@ -98,16 +101,20 @@ The demo room is a **6.0 × 4.5 × 2.8 m** box in centered coordinates:
 `id`, `name`, `category` (15 categories), `price` (USD), meter extents
 `width/depth/height`, `styleTags`, `colors`, `material`, `stock`,
 `defaultRotation?`, `thumbnailGradient?`. All data is hand-authored in
-`src/data/products.ts`; nothing is fetched at runtime.
+`src/data/products.ts`; nothing is fetched at runtime. A product's authored
+`colors` form its selectable colorways; its scalar `material` is the
+material component of every colorway.
 
 ### Placed furniture (`PlacedFurniture`)
 
 `instanceId` (deterministic), `productId`, `position` (`Vec3`, y = floor
 base), `rotation` (yaw degrees about +y; 0 = front faces +z/south),
 `locked`, `source` — `'existing'` (part of the seeded room) or
-`'marketplace'`. **Only `marketplace` items count toward the budget.**
-Locked items cannot be removed or replaced; they can still be moved and
-rotated.
+`'marketplace'` — plus `variant` (`{color, material}`): the chosen colorway
+(a product color) with the product's authored material. Variants are visual
+only: price, stock, geometry, validation, and budget never read them.
+**Only `marketplace` items count toward the budget.** Locked items cannot be
+removed or replaced; they can still be moved and rotated.
 
 ### Validation issues (`ValidationIssue`)
 
@@ -131,10 +138,15 @@ warnings inform but do not invalidate.
 ### Snapshots, cart, activity
 
 - `DesignSnapshot` — deep, serializable copy of room/items/budget plus
-  name/timestamps; restore validates shape and rejects duplicates.
+  `appearance` (wall/floor/wallpaper ids) and name/timestamps; restore
+  validates shape (incl. appearance ids and per-item variant strings) and
+  rejects duplicates.
+- `RoomAppearance` — `{wallFinishId, floorFinishId, wallpaperId}` from the
+  stable vocabularies in `domain/types.ts`; stored ids only, with labels,
+  colors, and procedural pattern metadata authored in `data/appearance.ts`.
 - `Cart` — lines of marketplace items priced from the catalog, `status:
   active | checked_out`; only placed marketplace instances may be added.
-- `ActivityEntry` — `id`, `type` (19 fixed kinds), `message` (fixed
+- `ActivityEntry` — `id`, `type` (20 fixed kinds), `message` (fixed
   template), optional `instanceId`/`productId`/`amount`; bounded feed.
 
 ## 4. State and actions (`src/store/roomStore.ts`)
@@ -144,6 +156,7 @@ warnings inform but do not invalidate.
 | field | notes |
 | --- | --- |
 | `room` | static geometry (from `data/`) |
+| `roomAppearance` | current styling (wall/floor/wallpaper ids); visual only — never feed-logged amounts |
 | `furniture` | readonly array; every write replaces it (never mutated in place) |
 | `budget` | number ≥ 0 |
 | `selectedInstanceId` / `cameraMode` | view state (never feed-logged) |
@@ -157,11 +170,12 @@ warnings inform but do not invalidate.
 
 - **View:** `selectItem`, `setCameraMode`.
 - **Read helpers:** `getProductById`, `searchProducts`,
-  `getAvailablePlacementZones`, `fitProductInZone`, `checkLayout`,
-  `calculateTotal`, `getBudgetPressure`, `findCheaperAlternatives`,
-  `recordAgentActivity`.
-- **Mutations:** `placeProduct`, `moveProduct`, `rotateProduct`,
-  `removeProduct`, `setItemLocked`, `replaceProduct`, `setBudget`,
+  `getAvailablePlacementZones`, `getCompatiblePlacementZones` (category
+  against an empty room), `fitProductInZone`, `checkLayout`, `calculateTotal`,
+  `getBudgetPressure`, `findCheaperAlternatives`, `recordAgentActivity`.
+- **Mutations:** `placeProduct` (with optional color/material variant),
+  `moveProduct`, `rotateProduct`, `removeProduct`, `setItemLocked`,
+  `replaceProduct`, `setBudget`, `setRoomAppearance` (partial visual patch),
   `saveDesign`, `loadDesign`, `resetToDefault`, `loadBudgetRescue`,
   `addToCart`.
 
@@ -198,13 +212,14 @@ read tools log *that a read happened*, never the query text.
 | module | responsibility |
 | --- | --- |
 | `catalog.ts` | Product lookup; `searchProducts` with free-text + category/style/color/material/price filters, dimension windows, deterministic sort, paging; stock awareness. |
-| `placement.ts` | Zone discovery for a category, zone fit preview, zone placement (centers item in zone footprint, enforces category/capacity/bounds), explicit x/z placement, move/rotate/remove/replace with lock rules. |
+| `placement.ts` | Zone discovery for a category, zone fit preview, zone placement (centers item in zone footprint, enforces category/capacity/bounds), explicit x/z placement, move/rotate/remove/replace with lock rules, variant resolution/validation (`invalid_variant`) with keep-or-reset color on replacement. |
 | `validation.ts` | Runs the issue checks from §3 in fixed order against room, furniture, and budget. |
 | `pricing.ts` | Marketplace-only totals (`newTotal` vs existing/grand), signed remaining, `getBudgetPressure` (under/at/over status + replaceable items most-expensive-first). |
 | `alternatives.ts` | For one placed marketplace item: cheaper same-category in-stock candidates ranked by style/color/material/dimension compatibility then savings; `totalSavings`. |
-| `designs.ts` | Snapshot capture/restore with deep copies and shape/duplicate validation; never aliases live state. |
+| `designs.ts` | Snapshot capture/restore with deep copies and shape/duplicate validation (incl. appearance ids and per-item variant strings); never aliases live state. |
 | `cart.ts` | Adds only placed marketplace instances; all-or-nothing; unique line ids; catalog prices; rejects post-checkout adds. |
 | `activity.ts` | Feed constants: bounded size, fixed per-type message templates with structured fields. |
+| `appearance.ts` | `updateRoomAppearance`: pure partial styling updates validating ids in wall → floor → wallpaper order; same-value no-ops preserve the reference. |
 
 ## 6. UI composition
 
@@ -234,10 +249,14 @@ mounts exactly once inside the shell.
 
 ### Panels
 
-- **MarketplacePanel** — flat sidebar content: search, category select, one
-  `Filters` disclosure (style/color/price), flat product rows with compact
-  "Place" actions (auto-zone placement), pagination, empty state. It owns its
-  scroll only when mounted in the rail.
+- **MarketplacePanel** — sidebar content with a Furniture / Room finishes
+  switch. Furniture: search, category select, one `Filters` disclosure
+  (style/color/price), retail product cards (thumbnail, category, name,
+  price, dimensions, material, stock, all colorway chips, compatible
+  placement zones, expandable details) whose "Place" action places the
+  chosen colorway, pagination, empty state. Room finishes: three radio-card
+  groups (wall/floor/wallpaper) calling `setRoomAppearance` directly with a
+  live status region. It owns its scroll only when mounted in the rail.
 - **FurnitureInspector** — placed-items list + selected-piece editor
   (position form, rotation steps, lock/unlock, remove, per-item validation
   issues) in a single internal scroll region; the polite status footer stays
@@ -283,13 +302,18 @@ Components never hard-code hex values.
 
 - `RoomCanvas` — client R3F `<Canvas>`: DPR capped at 2, soft PCF shadows,
   suspended scene with a quiet procedural fallback, `aria-hidden`.
-- `RoomArchitecture` — room shell: procedural floor texture (canvas, created
-  once), off-white walls, baseboards, window frames/glass, and door/window
-  clearances; clearance surfaces tint amber-neutral when clear and red when
-  blocked. Colors are cool slate-family to match the UI.
+- `RoomArchitecture` — room shell: procedural floor texture (canvas, per
+  appearance), walls painted in the chosen wall finish (plus an optional
+  deterministic repeating wallpaper canvas), matching baseboards, window
+  frames/glass, and door/window clearances; clearance surfaces tint
+  amber-neutral when clear and red when blocked. All textures come from
+  `data/appearance.ts`; nothing is fetched.
 - `FurnitureMesh` — every catalog category maps to procedural primitives
-  (boxes/cylinders) sized to the product's real extents, with material-aware
-  palette lookups. Geometry is memoized per product + selection. New/replaced
+  (boxes/cylinders) sized to the product's real extents, with materials
+  driven by each item's stored variant (primary color from `variant.color`,
+  accent from the next authored color, roughness/metalness from
+  `variant.material`). Geometry and materials are memoized per product +
+  variant + selection, and replaced materials are disposed. New/replaced
   items pop in; move/rotate damp toward store targets in `useFrame`
   **without per-frame allocations**. Flat rings mark selection and invalid
   placement; pointer events bubble to select the instance.
@@ -306,11 +330,11 @@ keyboard-accessible control outside the canvas.
 
 See `docs/WEBMCP.md` for the full protocol spec. In brief: `WebMcpProvider`
 calls `registerRoomTools()` in an effect, feature-detects
-`document.modelContext ?? navigator.modelContext`, registers 19 tools with
-JSON schemas and safety annotations, and unregisters on cleanup (Strict Mode
-safe). Tools call the same store actions as the UI with `origin: 'agent'`
-and return serializable JSON or structured failures — no throws, no partial
-mutations.
+`document.modelContext ?? navigator.modelContext`, registers 20 tools (9
+reads, 11 mutations — including `set_room_appearance`) with JSON schemas and
+safety annotations, and unregisters on cleanup (Strict Mode safe). Tools call
+the same store actions as the UI with `origin: 'agent'` and return
+serializable JSON or structured failures — no throws, no partial mutations.
 
 ## 10. Invariants reviewers should verify
 

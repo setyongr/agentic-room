@@ -15,7 +15,7 @@ Context API as a **shared, verifiable handoff between a web app and an
 agent**:
 
 - **No server-side MCP host needed.** The page is its own MCP server: it
-  registers 19 tools (9 reads, 10 mutations) with JSON schemas and safety
+  registers 20 tools (9 reads, 11 mutations) with JSON schemas and safety
   annotations against Chrome's in-browser Model Context API. There is no
   `webmcp` binary, no WebSocket daemon, no API key, and nothing to deploy
   besides the page itself.
@@ -51,7 +51,7 @@ agent**:
                     │        ▲                            ▲        │
                     │        │ same actions               │         │
                     │        │ origin: 'agent'            │         │
-  Chrome Model ─────┤  WebMcpProvider ── 19 tools ────────┘         │
+  Chrome Model ─────┤  WebMcpProvider ── 20 tools ────────┘         │
   Context API       │  (registerRoomTools)                          │
   (assistant /      │  document.modelContext.registerTool(...)      │
   console script)   └──────────────────────────────────────────────┘
@@ -60,7 +60,7 @@ agent**:
 - **Registration.** `WebMcpProvider` (mounted once inside `PlannerShell`)
   calls `registerRoomTools()` in a client effect. It feature-detects
   `document.modelContext` (and `navigator.modelContext` on experimental
-  builds), then registers the 19 tools sequentially, honoring an
+  builds), then registers the 20 tools sequentially, honoring an
   `AbortController` signal whose abort unregisters them — which makes the
   effect safe under React Strict Mode's mount → cleanup → mount cycle.
   Unsupported browsers get a no-op cleanup: the planner works, tools just
@@ -84,7 +84,13 @@ agent**:
 - **Marketplace**: 78 hand-authored products across 15 categories with
   prices, meter dimensions, style tags, colors, materials, and stock; search
   with free-text, category, style, color, material, and price filters,
-  deterministic sorting (relevance / price / name), and pagination.
+  deterministic sorting (relevance / price / name), and pagination. Product
+  cards show every colorway (with stock, dimensions, material, and
+  compatible zones) and place the colorway you pick.
+- **Room styling**: four wall finishes, four floor finishes, and three
+  optional wallpaper patterns, chosen from accessible swatch cards and
+  rendered procedurally on the 3D walls and floor; a stage overlay and saved
+  design thumbnails reflect the current styling.
 - **3D room editor**: a procedural 6 × 4.5 × 2.8 m living room (React Three
   Fiber) with three wall openings (entry door, east window, balcony door),
   ten placement zones (media wall, reading corner, sofa sides, window side,
@@ -108,7 +114,7 @@ agent**:
   through WebMCP. Agent-only helpers add structured zone, pressure, and
   alternative analysis.
 
-## The tool surface — 19 tools
+## The tool surface — 20 tools
 
 All results are JSON strings: `{success:true, ...}` or
 `{success:false, error, code, ...details}`. Argument names match the JSON
@@ -118,29 +124,30 @@ schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
-| `get_room_state` | Full snapshot: room dimensions, openings, every placed item (id, name, category, dimensions, position, rotation, lock, source, budget price), budget, live pricing, validation issues, last saved design name | — |
+| `get_room_state` | Full snapshot: room dimensions, openings, room appearance (wall/floor/wallpaper), every placed item (id, name, category, dimensions, position, rotation, lock, source, budget price, color/material variant), budget, live pricing, validation issues, last saved design name | — |
 | `get_available_placement_zones` | Zones that accept a category and still have capacity, with occupancy and remaining slots | `category` (enum) |
 | `search_products` | Catalog search with filters, dimension window, deterministic sort and paging | `query`, `category`, `styles`, `colors`, `materials`, `minPrice`, `maxPrice`, `inStockOnly`, `sort`, `maxWidth`, `maxDepth`, `page`, `pageSize` |
-| `get_product` | One product's full catalog details plus its placed instances | `productId` |
+| `get_product` | One product's full catalog details, its compatible placement zones, plus its placed instances | `productId` |
 | `check_layout` | Re-run validation: valid flag plus every issue (kind, severity, message, affected instances) | — |
 | `calculate_total` | Full budget breakdown: marketplace/existing subtotals, grand total, budget, signed remaining, over-budget flag, one line per item | — |
 | `get_budget_pressure` | under/at/over-budget status, remaining, amount over, replaceable marketplace items sorted by price (most expensive first) | — |
 | `find_cheaper_alternatives` | Cheaper same-category, in-stock replacements for one placed marketplace item, ranked by style/color/material/dimension compatibility then savings, with scores | `instanceId`, `targetPrice?`, `maxResults?` |
-| `get_saved_designs` | Designs saved this session, newest first, with budget, item count, and marketplace total at save time | — |
+| `get_saved_designs` | Designs saved this session, newest first, with budget, item count, marketplace total, and room appearance at save time | — |
 
-### Mutations (10) — same store actions as the UI, `origin: 'agent'`
+### Mutations (11) — same store actions as the UI, `origin: 'agent'`
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
-| `place_product` | Add a product: `zoneId` centers it in a zone (category/capacity/fit enforced), or `position {x, z}` places it explicitly; optional `rotation`. Returns the item plus refreshed pricing and layout | `productId`, `zoneId` **or** `position`, `rotation?` |
+| `place_product` | Add a product: `zoneId` centers it in a zone (category/capacity/fit enforced), or `position {x, z}` places it explicitly; optional `rotation` and optional `color` (a product colorway; its authored material is applied). Returns the item with its stored variant plus refreshed pricing and layout | `productId`, `zoneId` **or** `position`, `rotation?`, `color?`, `material?` |
 | `move_product` | Move a placed item to new x/z coordinates (locked items may move; the move itself is unvalidated, validation refreshes immediately) | `instanceId`, `position` |
 | `rotate_product` | Set yaw rotation in degrees, normalized to [0, 360) | `instanceId`, `rotation` |
 | `remove_product` | Remove a placed item (destructive; locked items rejected with `item_locked`) | `instanceId` |
 | `set_item_locked` | Lock or unlock an item; locked items cannot be removed or replaced but may move/rotate | `instanceId`, `locked` |
 | `set_budget` | Set the design budget (≥ 0); only marketplace items count against it; budget check refreshes immediately | `budget` |
-| `replace_product` | Swap the product backing an item (same category, in stock, unlocked); keeps instance id, position, rotation, source; returns the price `savings` (negative when pricier) | `instanceId`, `replacementProductId` |
-| `save_design` | Capture the live design as a named snapshot | `name`, `thumbnailGradient?` |
-| `load_design` | Restore a session snapshot (destructive: current design is discarded; unknown ids fail with `design_not_found`) | `designId` |
+| `replace_product` | Swap the product backing an item (same category, in stock, unlocked); keeps instance id, position, rotation, source, and the color when the replacement offers it; returns the price `savings` (negative when pricier) | `instanceId`, `replacementProductId` |
+| `set_room_appearance` | Style the room: all three finish ids or `preset: "default"`; visual only, never affects pricing or layout | `wallFinishId`, `floorFinishId`, `wallpaperId` **or** `preset` |
+| `save_design` | Capture the live design (room, items with variants, appearance) as a named snapshot | `name`, `thumbnailGradient?` |
+| `load_design` | Restore a session snapshot, including room appearance and item variants (destructive: current design is discarded; unknown ids fail with `design_not_found`) | `designId` |
 | `add_to_cart` | Add placed marketplace items to the cart at catalog prices; all-or-nothing (unknown, existing, or already-carted instances reject the whole request) | `instanceIds` (array) |
 
 ## Quick start
@@ -168,7 +175,7 @@ Other commands:
 
 ```bash
 bun run check      # typecheck (tsc --noEmit)
-bun run test       # run the test suite (vitest) — 39 tests, 6 files
+bun run test       # run the test suite (vitest) — 54 tests, 7 files
 bun run build      # production build
 bun run start      # serve the production build
 ```
@@ -292,17 +299,18 @@ its dollar amount.
 bun run test
 ```
 
-39 tests across 6 pure-domain suites (`src/domain/*.test.ts`), run with
+54 tests across 7 pure-domain suites (`src/domain/*.test.ts`), run with
 Vitest under jsdom:
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
 | `validation.test.ts` | 5 | bounds, overlap tolerance, east-window, balcony-door, and entry-door clearance |
 | `pricing.test.ts` | 6 | existing-vs-marketplace accounting, over-budget reporting, replacement repricing |
-| `placement.test.ts` | 6 | locked-item rules, remove/replace/move/rotate invariants |
-| `designs.test.ts` | 9 | snapshot save/restore fidelity and isolation, corrupt-input rejection |
+| `placement.test.ts` | 13 | locked-item rules, remove/replace/move/rotate invariants, colorway resolution and preservation |
+| `designs.test.ts` | 10 | snapshot save/restore fidelity and isolation, corrupt-input rejection, appearance/variant round-trips |
 | `cart.test.ts` | 8 | marketplace-only adds, all-or-nothing rejection, dedupe, totals |
 | `alternatives.test.ts` | 5 | candidate filtering, ranking determinism, caps, structured errors |
+| `appearance.test.ts` | 7 | room appearance updates: immutability, same-value no-ops, invalid id rejection |
 
 ## Project structure
 
@@ -319,12 +327,13 @@ src/
                     camera controller (orbit/top/front/side), canvas
     WebMcpProvider  single Model Context registry host for the page
   data/             deterministic catalog (78 products), placement zones,
-                    demo presets (default demo + Budget Rescue)
+                    room appearance registry, demo presets (default demo +
+                    Budget Rescue)
   domain/           pure logic: catalog, placement, validation, pricing,
                     alternatives, designs, cart, activity, shared types
   store/            roomStore — the single Zustand source of truth
   webmcp/           Model Context API surface: registerTools, serialize,
-                    tools/readTools.ts (9), tools/mutationTools.ts (10)
+                    tools/readTools.ts (9), tools/mutationTools.ts (11)
 ```
 
 Each `src/` directory and every runtime rule is explained in depth in

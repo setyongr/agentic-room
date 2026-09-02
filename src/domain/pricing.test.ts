@@ -61,6 +61,7 @@ describe('calculateTotal', () => {
       rotation: 0,
       locked: false,
       source: 'marketplace',
+      variant: { color: 'ghost', material: 'unknown' },
     };
     const summary = calculateTotal([...DEFAULT_ROOM_ITEMS, table, ghost], 700);
     expect(summary.items.some((line) => line.productId === 'not-in-catalog')).toBe(false);

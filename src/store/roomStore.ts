@@ -43,6 +43,7 @@ import type {
   FurnitureProduct,
   PlacedFurniture,
   PriceSummary,
+  RoomAppearance,
   RoomData,
   SearchProductsArgs,
   SearchProductsResult,
@@ -51,6 +52,7 @@ import type {
 } from '@/domain/types';
 import { BUDGET_RESCUE_SNAPSHOT, DEFAULT_DEMO_SNAPSHOT } from '@/data/demoRoom';
 import * as activity from '@/domain/activity';
+import * as appearance from '@/domain/appearance';
 import * as alternatives from '@/domain/alternatives';
 import * as cart from '@/domain/cart';
 import * as catalog from '@/domain/catalog';
@@ -120,6 +122,8 @@ export interface RoomStore {
 
   /** Static room geometry (dimensions, openings, placement zones). */
   room: RoomData;
+  /** Current visual styling of the room shell (finishes and wallpaper). */
+  roomAppearance: RoomAppearance;
   /** Placed furniture instances, never mutated in place. */
   furniture: readonly PlacedFurniture[];
   /** Current design budget in USD; only marketplace items count against it. */
@@ -173,6 +177,10 @@ export interface RoomStore {
     zoneId: string,
     options?: placement.FitProductInZoneOptions,
   ) => SerializableResult<placement.FitProductInZoneResult>;
+  /** Zones that accept a category with no items placed (compatible regardless of occupancy or fit). */
+  getCompatiblePlacementZones: (
+    category: FurnitureCategory,
+  ) => SerializableResult<placement.AvailablePlacementZonesResult>;
   /** Re-run layout validation against the live room, items, and budget. */
   checkLayout: (origin?: ActionOrigin) => ValidationResult;
   /** Re-run the budget breakdown against the live items and budget. */
@@ -232,6 +240,11 @@ export interface RoomStore {
   ) => SerializableResult<placement.ReplaceProductResult>;
   /** Set the design budget; refreshes validation (budget check) and pricing. */
   setBudget: (budget: number, origin?: ActionOrigin) => SerializableResult<{ budget: number }>;
+  /** Apply a partial styling change to the room appearance (visual only; never touches pricing or layout). */
+  setRoomAppearance: (
+    patch: Partial<RoomAppearance>,
+    origin?: ActionOrigin,
+  ) => SerializableResult<RoomAppearance>;
   /** Capture the current design as a saved snapshot. */
   saveDesign: (
     name: string,
@@ -260,7 +273,7 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
   if (!initial.ok) {
     throw new Error(`Cannot initialize the room store from the default snapshot: ${initial.message}`);
   }
-  const { room, items, budget } = initial.data;
+  const { room, items, budget, appearance: initialAppearance } = initial.data;
 
   /**
    * Recompute the derived validation/pricing for a changed design and stage
@@ -281,6 +294,7 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
   /** Stage the state updates for restoring a snapshot into the live design. */
   const restoreDesign = (restored: designs.RestoredDesign): Partial<RoomStore> => ({
     ...refreshDesign(restored.room, restored.items, restored.budget),
+    roomAppearance: restored.appearance,
     selectedInstanceId: null,
   });
 
@@ -315,6 +329,7 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
   return {
     /* ── State ── */
     room,
+    roomAppearance: initialAppearance,
     furniture: items,
     budget,
     selectedInstanceId: null,
@@ -358,6 +373,9 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
         ...options,
         items: options.items ?? get().furniture,
       }),
+
+    getCompatiblePlacementZones: (category) =>
+      placement.getAvailablePlacementZones(category, get().room, []),
 
     checkLayout: (origin = 'human') => {
       const prev = get();
@@ -578,16 +596,28 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
       }
       commit(prev, refreshDesign(prev.room, prev.furniture, budget), origin, {
         type: 'budget_updated',
-        message: `Budget set to $${budget.toFixed(2)}`,
+        message: `Budget set to ${budget.toFixed(2)}`,
         amount: budget,
       });
       return { ok: true, data: { budget } };
     },
 
+    setRoomAppearance: (patch, origin = 'human') => {
+      const prev = get();
+      const result = appearance.updateRoomAppearance(prev.roomAppearance, patch);
+      if (!result.ok) return result;
+      if (result.data === prev.roomAppearance) return result; // no-op success: nothing changed
+      commit(prev, { roomAppearance: result.data }, origin, {
+        type: 'room_appearance_updated',
+        message: 'Updated room finishes',
+      });
+      return result;
+    },
+
     saveDesign: (name, options = {}, origin = 'human') => {
       const prev = get();
       const sequence = prev.sessionSequence + 1;
-      const snapshot = designs.createDesignSnapshot(prev.room, prev.furniture, prev.budget, {
+      const snapshot = designs.createDesignSnapshot(prev.room, prev.furniture, prev.budget, prev.roomAppearance, {
         id: `snapshot-${sequence}`,
         name,
         createdAt: timestampFor(sequence),

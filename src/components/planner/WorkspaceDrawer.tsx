@@ -72,7 +72,7 @@ export function WorkspaceDrawer({ children, open, title, onClose }: WorkspaceDra
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="absolute inset-x-0 bottom-0 flex max-h-[86dvh] min-h-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-surface shadow-pop sm:inset-y-0 sm:left-auto sm:w-full sm:max-w-md sm:rounded-none sm:border-t-0 sm:border-l"
+        className="absolute inset-x-0 bottom-0 flex max-h-[86dvh] min-h-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-surface shadow-pop sm:inset-y-0 sm:max-h-none sm:left-auto sm:w-full sm:max-w-md sm:rounded-none sm:border-t-0 sm:border-l"
       >
         <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-border px-5">
           <h2 id={titleId} className="text-base font-semibold tracking-tight text-text">

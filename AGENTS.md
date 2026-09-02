@@ -9,7 +9,7 @@ before touching anything structural.
 A Next.js 16 + React 19 + TypeScript (strict) single-page living-room planner
 with no backend: a deterministic furniture catalog and room store in the
 browser, a React Three Fiber 3D editor, and a WebMCP surface — the page
-registers 19 tools against Chrome's Model Context API
+registers 20 tools against Chrome's Model Context API
 (`document.modelContext`/`navigator.modelContext`) so a browser agent can
 drive the exact same store actions as the human UI. All product/room data is
 hand-authored constants; nothing is fetched at runtime.
@@ -20,7 +20,7 @@ hand-authored constants; nothing is fetched at runtime.
 bun install        # dependencies
 bun run dev        # dev server → http://localhost:3000
 bun run check      # typecheck (tsc --noEmit)      — run before finishing
-bun run test       # Vitest domain suites (39 tests, 6 files)
+bun run test       # Vitest domain suites (54 tests, 7 files)
 bun run build      # production build
 bun run start      # serve production build
 ```
@@ -35,9 +35,12 @@ come from `getTools()`).
 ```
 src/
   domain/    pure logic + types + colocated *.test.ts   ← ground truth rules
-  data/      products.ts (78), placementZones.ts (10), demoRoom.ts (presets)
+             (incl. appearance.ts — visual-only room styling updates)
+  data/      products.ts (78), appearance.ts (room styling registry),
+             placementZones.ts (10), demoRoom.ts (presets)
   store/     roomStore.ts (single Zustand source of truth), selectors.ts
   webmcp/    registerTools.ts, serialize.ts, tools/{read,mutation}Tools.ts
+             (9 reads / 11 mutations)
   components/ planner/ (shell + panels + drawers), marketplace/, three/ (R3F)
   app/       page.tsx, layout.tsx, globals.css (Tailwind v4 tokens)
 docs/
@@ -112,3 +115,13 @@ README.md           product overview, quick start, demo workflows
 
 Start with `docs/ARCHITECTURE.md` §10 (invariants checklist), then run
 `docs/TESTING.md` §2–§5 (automated suites, WebMCP pass, UI pass, hygiene).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

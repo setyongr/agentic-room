@@ -144,6 +144,7 @@ export function placedItemCard(
     rotation: item.rotation,
     locked: item.locked,
     source: item.source,
+    variant: { color: item.variant.color, material: item.variant.material },
   };
 }
 
@@ -182,7 +183,7 @@ function priceLineCard(line: PriceItem): Record<string, unknown> {
 function getRoomStateTool(): ModelContextTool {
   return readTool(
     'get_room_state',
-    'Read the current room state: room dimensions, wall openings (doors and windows with footprints), every placed furniture item with its id, name, category, dimensions, position, rotation, lock and source flags, and budget-relevant price, the design budget, live pricing totals, and layout validation issues. When a design was saved this session, its name is included. Deterministic; never mutates state.',
+    'Read the current room state: room dimensions, wall openings (doors and windows with footprints), the room appearance (wall finish, floor finish, wallpaper), every placed furniture item with its id, name, category, dimensions, position, rotation, lock and source flags, budget-relevant price, and chosen color and material variant, the design budget, live pricing totals, and layout validation issues. When a design was saved this session, its name is included. Deterministic; never mutates state.',
     (input) => {
       const args = readObjectInput(input);
       if (!args.ok) return toolFail(args.code, args.message);
@@ -209,6 +210,11 @@ function getRoomStateTool(): ModelContextTool {
             height: opening.height,
             sillHeight: opening.sillHeight,
           })),
+        },
+        appearance: {
+          wallFinishId: state.roomAppearance.wallFinishId,
+          floorFinishId: state.roomAppearance.floorFinishId,
+          wallpaperId: state.roomAppearance.wallpaperId,
         },
         items: state.furniture.map((item) =>
           placedItemCard(item, state.getProductById(item.productId)),
@@ -444,6 +450,7 @@ function getProductTool(): ModelContextTool {
         });
       }
       state.recordAgentActivity({ type: 'product_viewed', productId: productId.value });
+      const compatibleZones = state.getCompatiblePlacementZones(product.category);
       return toolOk({
         product: {
           id: product.id,
@@ -464,6 +471,13 @@ function getProductTool(): ModelContextTool {
             ? { thumbnailGradient: product.thumbnailGradient }
             : {}),
         },
+        compatiblePlacementZones: compatibleZones.ok
+          ? compatibleZones.data.zones.map((entry) => ({
+              id: entry.zone.id,
+              name: entry.zone.name,
+              kind: entry.zone.kind,
+            }))
+          : [],
         placedInstanceIds: state.furniture
           .filter((item) => item.productId === product.id)
           .map((item) => item.instanceId),
@@ -628,7 +642,7 @@ function findCheaperAlternativesTool(): ModelContextTool {
 function getSavedDesignsTool(): ModelContextTool {
   return readTool(
     'get_saved_designs',
-    'List the designs saved during this session, newest first, with each snapshot\u2019s budget, placed-item count, and marketplace total at save time. Deterministic read of session state; never mutates state.',
+    'List the designs saved during this session, newest first, with each snapshot\u2019s budget, placed-item count, marketplace total, and room appearance at save time. Deterministic read of session state; never mutates state.',
     (input) => {
       const args = readObjectInput(input);
       if (!args.ok) return toolFail(args.code, args.message);
@@ -647,6 +661,11 @@ function getSavedDesignsTool(): ModelContextTool {
           budget: design.budget,
           itemCount: design.items.length,
           total: pricing.calculateTotal(design.items, design.budget).newTotal,
+          appearance: {
+            wallFinishId: design.appearance.wallFinishId,
+            floorFinishId: design.appearance.floorFinishId,
+            wallpaperId: design.appearance.wallpaperId,
+          },
         })),
       });
     },

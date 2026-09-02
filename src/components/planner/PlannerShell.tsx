@@ -8,6 +8,8 @@ import { FurnitureInspector } from '@/components/planner/FurnitureInspector';
 import { PlannerHeader, RoomCameraControls } from '@/components/planner/PlannerHeader';
 import { WorkspaceDrawer } from '@/components/planner/WorkspaceDrawer';
 import { type SidebarMode, WorkspaceStatusBar } from '@/components/planner/WorkspaceStatusBar';
+import { resolveAppearance } from '@/data/appearance';
+import type { RoomAppearance } from '@/domain/types';
 import { MarketplacePanel } from '@/components/marketplace/MarketplacePanel';
 import { RoomCanvas } from '@/components/three/RoomCanvas';
 import { WebMcpProvider } from '@/components/WebMcpProvider';
@@ -22,6 +24,7 @@ const FOCUSABLE_SELECTOR =
 /** One viewport-sized room planning workspace with focused secondary surfaces. */
 export function PlannerShell() {
   const selectedInstanceId = useRoomStore((state) => state.selectedInstanceId);
+  const roomAppearance = useRoomStore((state) => state.roomAppearance);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('catalog');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<Drawer>(null);
@@ -134,7 +137,7 @@ export function PlannerShell() {
           aria-modal={mobileSheetOpen ? true : undefined}
           role={mobileSheetOpen ? 'dialog' : undefined}
           inert={mobileSheetClosed}
-          className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[min(78dvh,42rem)] min-h-0 flex-col border-t border-border bg-surface transition-transform duration-200 ease-out motion-reduce:transition-none lg:absolute lg:inset-y-0 lg:left-0 lg:right-auto lg:z-10 lg:w-80 lg:max-h-none lg:translate-y-0 lg:border-t-0 lg:border-r ${
+          className={`fixed inset-x-0 bottom-0 z-40 flex h-[min(78dvh,42rem)] min-h-0 flex-col border-t border-border bg-surface transition-transform duration-200 ease-out motion-reduce:transition-none lg:absolute lg:inset-y-0 lg:left-0 lg:right-auto lg:z-10 lg:w-80 lg:h-auto lg:max-h-none lg:translate-y-0 lg:border-t-0 lg:border-r ${
             mobileSidebarOpen ? 'translate-y-0' : 'translate-y-full'
           }`}
         >
@@ -169,7 +172,7 @@ export function PlannerShell() {
               <X className="size-5" aria-hidden="true" />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             {sidebarMode === 'catalog' ? <MarketplacePanel /> : <FurnitureInspector />}
           </div>
         </aside>
@@ -183,8 +186,9 @@ export function PlannerShell() {
               <div className="rounded-control border border-border bg-surface/90 px-3 py-2">
                 <p className="flex items-center gap-2 text-xs font-semibold tracking-wider text-text-muted uppercase">
                   <Compass className="size-4 text-accent" aria-hidden="true" />
-                  <span id="room-stage-heading">3D room view</span>
+                  <span id="room-stage-heading" className="sr-only sm:not-sr-only">3D room view</span>
                 </p>
+                <FinishSummary appearance={roomAppearance} />
               </div>
               <div className="pointer-events-auto">
                 <RoomCameraControls />
@@ -216,5 +220,49 @@ export function PlannerShell() {
         {activeDrawer === 'designs' ? <DesignCartPanel view="designs" /> : null}
       </WorkspaceDrawer>
     </main>
+  );
+}
+
+/** Live finish chips for the stage overlay, driven directly by room appearance. */
+function FinishSummary({ appearance }: { appearance: RoomAppearance }) {
+  const { wall, floor, wallpaper } = resolveAppearance(appearance);
+  const chips = [
+    { label: wall.name, swatch: wall.wall },
+    { label: floor.name, swatch: floor.base },
+    { label: wallpaper.name, swatch: wallpaper.pattern === 'none' ? undefined : wallpaper.ink },
+  ];
+  return (
+    <p
+      className="mt-2 flex items-center"
+      aria-label={`Room finishes: ${wall.name}, ${floor.name}, ${wallpaper.name}`}
+    >
+      {/* Compact single pill below sm so the overlay never collides with the camera cluster. */}
+      <span className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface-muted/80 px-2 py-1 text-[11px] font-semibold tracking-wide text-text-muted uppercase sm:hidden">
+        Finishes
+        {chips.map((chip) => (
+          <span
+            key={chip.label}
+            aria-hidden="true"
+            className="inline-block size-2.5 shrink-0 rounded-pill border border-black/10"
+            style={{ background: chip.swatch ?? '#f8fafc' }}
+          />
+        ))}
+      </span>
+      <span className="hidden items-center gap-1.5 sm:inline-flex">
+        {chips.map((chip) => (
+          <span
+            key={chip.label}
+            className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface-muted/80 px-2 py-1 text-[11px] font-medium text-text-muted"
+          >
+            <span
+              aria-hidden="true"
+              className="inline-block size-2.5 shrink-0 rounded-pill border border-black/10"
+              style={{ background: chip.swatch ?? '#f8fafc' }}
+            />
+            <span className="capitalize">{chip.label}</span>
+          </span>
+        ))}
+      </span>
+    </p>
   );
 }

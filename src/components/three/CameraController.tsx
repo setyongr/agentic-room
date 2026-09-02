@@ -49,9 +49,9 @@ const PRESETS: Record<CameraMode, CameraPreset> = {
   /** Free three-quarter design view with a tight zoom floor and a wide orbit. */
   orbit: {
     target: [0, 1.3, 0],
-    radius: 7.4,
-    phi: 73.5 * DEG,
-    theta: -39 * DEG,
+    radius: 9,
+    phi: 60 * DEG,
+    theta: 39 * DEG,
     fov: 50,
     minDistance: 3.5,
     maxDistance: 14,
@@ -85,7 +85,7 @@ const PRESETS: Record<CameraMode, CameraPreset> = {
    */
   front: {
     target: [0, 1.3, 0],
-    radius: 6.2,
+    radius: 8.5,
     phi: 71.6 * DEG,
     theta: 0,
     fov: 50,
@@ -99,7 +99,7 @@ const PRESETS: Record<CameraMode, CameraPreset> = {
   /** East overview: same envelope, framing the interior through the cutaway east wall. */
   side: {
     target: [0, 1.3, 0],
-    radius: 6.2,
+    radius: 8.5,
     phi: 71.6 * DEG,
     theta: 90 * DEG,
     fov: 50,
@@ -181,6 +181,13 @@ function snapToPreset(
  */
 export function CameraController({ mode }: { mode: CameraMode }) {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
+  const size = useThree((state) => state.size);
+  const preset = useMemo(() => {
+    const base = PRESETS[mode];
+    // Keep the room in frame when the stage is narrower than it is tall.
+    const scale = Math.max(1, size.height / Math.max(size.width, 1));
+    return { ...base, radius: base.radius * scale, maxDistance: base.maxDistance * scale };
+  }, [mode, size.width, size.height]);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
 
   // Scratch objects reused by the flight loop: no per-frame allocation.
@@ -202,7 +209,6 @@ export function CameraController({ mode }: { mode: CameraMode }) {
   useEffect(() => {
     const controls = controlsRef.current;
     if (!controls) return;
-    const preset = PRESETS[mode];
 
     // The canvas camera already starts on the orbit preset; snap so the
     // very first frame is always the store's active mode, no startup flight.
@@ -240,7 +246,7 @@ export function CameraController({ mode }: { mode: CameraMode }) {
     // while the flight owns the camera keeps its clamps from fighting the
     // animation. Re-enabled when the flight lands.
     controls.enabled = false;
-  }, [mode, camera, reduceMotion, scratchOffset, scratchTarget, scratchSpherical]);
+  }, [preset, camera, reduceMotion, scratchOffset, scratchTarget, scratchSpherical]);
 
   useFrame((_, delta) => {
     const flight = flightRef.current;
@@ -273,8 +279,6 @@ export function CameraController({ mode }: { mode: CameraMode }) {
       controls.enabled = true;
     }
   });
-
-  const preset = PRESETS[mode];
 
   return (
     <OrbitControls
