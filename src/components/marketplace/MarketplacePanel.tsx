@@ -143,19 +143,19 @@ export function MarketplacePanel() {
   }
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-border bg-surface" aria-label="Marketplace">
-      <div className="border-b border-border px-4 py-5 sm:px-5">
+    <aside className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface" aria-label="Marketplace">
+      <header className="border-b border-border px-4 py-4 sm:px-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold tracking-widest text-accent-strong uppercase">Marketplace</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-text">Find your next piece</h2>
+            <h2 className="mt-1 text-lg font-semibold tracking-tight text-text">Find furniture</h2>
           </div>
-          <span className="flex min-h-11 items-center rounded-pill bg-surface-muted px-3 text-sm font-medium text-text-muted tabular-nums">
-            {results.total} {results.total === 1 ? 'piece' : 'pieces'}
+          <span className="pt-1 text-sm font-medium text-text-muted tabular-nums">
+            {results.total} {results.total === 1 ? 'result' : 'results'}
           </span>
         </div>
 
-        <div className="relative mt-4">
+        <div className="relative mt-3">
           <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-muted" />
           <label className="sr-only" htmlFor="marketplace-search">Search furniture</label>
           <input
@@ -167,30 +167,24 @@ export function MarketplacePanel() {
             onChange={(event) => resetPage(() => setQuery(event.target.value))}
           />
         </div>
-      </div>
 
-      <div className="border-b border-border px-4 py-4 sm:px-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold text-text">
-            <SlidersHorizontal aria-hidden="true" className="size-4 text-accent" />
-            Refine your search
-          </div>
-          {hasActiveFilters ? (
-            <button
-              className="min-h-11 rounded-control px-2 text-sm font-medium text-accent-strong transition-colors hover:bg-accent-soft"
-              type="button"
-              onClick={clearFilters}
-            >
-              Clear filters
-            </button>
-          ) : null}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
+        <div className="mt-3">
           <FilterSelect label="Category" value={category} onChange={(value) => resetPage(() => setCategory(value))}>
             <option value="">All categories</option>
             {categories.map((item) => <option key={item} value={item}>{CATEGORY_LABELS[item]}</option>)}
           </FilterSelect>
+        </div>
+      </header>
+
+      <details className="border-b border-border px-4 py-1 sm:px-5">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-text">
+          <span className="flex items-center gap-2">
+            <SlidersHorizontal aria-hidden="true" className="size-4 text-accent" />
+            Filters
+          </span>
+          <span className="text-xs font-medium text-text-muted">{hasActiveFilters ? 'Active' : 'Optional'}</span>
+        </summary>
+        <div className="grid grid-cols-2 gap-3 border-t border-border py-3">
           <FilterSelect label="Style" value={style} onChange={(value) => resetPage(() => setStyle(value))}>
             <option value="">All styles</option>
             {styles.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -199,7 +193,7 @@ export function MarketplacePanel() {
             <option value="">All colors</option>
             {colors.map((item) => <option key={item} value={item} className="capitalize">{item}</option>)}
           </FilterSelect>
-          <div>
+          <div className="col-span-2">
             <label className="mb-1 block text-xs font-medium text-text-muted" htmlFor="minimum-price">Price range</label>
             <div className="flex items-center gap-1.5">
               <input id="minimum-price" aria-label="Minimum price" className="min-h-11 min-w-0 w-full rounded-control border border-border bg-surface-raised px-2 text-sm text-text tabular-nums placeholder:text-text-faint" inputMode="numeric" min="0" placeholder="Min" type="number" value={minPrice} onChange={(event) => resetPage(() => setMinPrice(event.target.value))} />
@@ -207,41 +201,86 @@ export function MarketplacePanel() {
               <input aria-label="Maximum price" className="min-h-11 min-w-0 w-full rounded-control border border-border bg-surface-raised px-2 text-sm text-text tabular-nums placeholder:text-text-faint" inputMode="numeric" min="0" placeholder="Max" type="number" value={maxPrice} onChange={(event) => resetPage(() => setMaxPrice(event.target.value))} />
             </div>
           </div>
+          {hasActiveFilters ? (
+            <button className="col-span-2 min-h-11 justify-self-start rounded-control px-2 text-sm font-medium text-accent-strong transition-colors hover:bg-accent-soft motion-reduce:transition-none" type="button" onClick={clearFilters}>
+              Clear filters
+            </button>
+          ) : null}
         </div>
-      </div>
+      </details>
 
-      <div aria-atomic="true" aria-live="polite" className="px-4 pt-3 sm:px-5">
-        {feedback ? (
-          <div className={`flex gap-2 rounded-control px-3 py-2 text-sm ${feedback.kind === 'success' ? 'bg-success-soft text-success' : 'bg-error-soft text-error'}`}>
+      {feedback ? (
+        <div aria-atomic="true" aria-live="polite" className="border-b border-border px-4 py-3 sm:px-5">
+          <div className={`flex gap-2 text-sm ${feedback.kind === 'success' ? 'text-success' : 'text-error'}`}>
             {feedback.kind === 'success' ? <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
             <p>{feedback.message}</p>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+      <div className="px-4 pb-4 sm:px-5">
         {results.products.length > 0 ? (
-          <div className="space-y-3">
+          <div className="divide-y divide-border">
             {results.products.map((product) => (
               <ProductCard key={product.id} product={product} placing={placingProductId === product.id} onPlace={handlePlace} />
             ))}
           </div>
         ) : (
-          <div className="flex min-h-64 flex-col items-start justify-center rounded-card border border-dashed border-border bg-surface-muted p-5">
+          <div className="flex min-h-64 flex-col items-start justify-center py-8">
             <PackageOpen aria-hidden="true" className="size-6 text-accent" />
             <h3 className="mt-4 text-base font-semibold text-text">No pieces match yet</h3>
             <p className="mt-1 text-sm leading-6 text-text-muted">Try a broader style, color, or price range to bring more of the collection into view.</p>
-            {hasActiveFilters ? <button className="mt-4 min-h-11 rounded-control bg-accent px-4 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong" type="button" onClick={clearFilters}>Show the full collection</button> : null}
+            {hasActiveFilters ? <button className="mt-4 min-h-11 rounded-control bg-accent px-4 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong motion-reduce:transition-none" type="button" onClick={clearFilters}>Show the full collection</button> : null}
           </div>
         )}
 
-        {hasMore ? (
-          <button className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-control border border-border bg-surface-raised px-4 text-sm font-semibold text-text transition-colors hover:bg-surface-muted" type="button" onClick={() => setPage((currentPage) => currentPage + 1)}>
-            Show next 12 pieces
-          </button>
+        {results.total > PAGE_SIZE ? (
+          <nav className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3" aria-label="Marketplace pagination">
+            <button className="min-h-11 rounded-control px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={page === 1} type="button" onClick={() => setPage((currentPage) => currentPage - 1)}>
+              Previous
+            </button>
+            <span className="text-xs text-text-muted tabular-nums">Page {page}</span>
+            <button className="min-h-11 rounded-control px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={!hasMore} type="button" onClick={() => setPage((currentPage) => currentPage + 1)}>
+              Next
+            </button>
+          </nav>
         ) : null}
       </div>
     </aside>
+  );
+}
+function ProductCard({ onPlace, placing, product }: { onPlace: (product: FurnitureProduct) => void; placing: boolean; product: FurnitureProduct }) {
+  const available = product.stock > 0;
+  const categoryLabel = CATEGORY_LABELS[product.category] ?? product.category;
+  return (
+    <article className="flex gap-3 py-3">
+      <div
+        className="size-20 shrink-0 rounded-control border border-border"
+        style={{ background: product.thumbnailGradient ?? 'var(--surface-muted)' }}
+        aria-hidden="true"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-text-muted">{categoryLabel}</p>
+            <h3 className="truncate text-sm font-semibold leading-5 text-text">{product.name}</h3>
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-text tabular-nums">{CURRENCY.format(product.price)}</span>
+        </div>
+        <p className="mt-1 truncate text-xs text-text-muted">{product.colors[0] ?? 'Natural'} · {product.material}</p>
+        <p className="mt-1 text-xs tabular-nums text-text-muted">{product.width} W × {product.depth} D × {product.height} H m</p>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${available ? 'text-success' : 'text-error'}`}>
+            <span aria-hidden="true" className={`size-1.5 rounded-pill ${available ? 'bg-success' : 'bg-error'}`} />
+            {available ? `${product.stock} in stock` : 'Out of stock'}
+          </span>
+          <button aria-label={`Place ${product.name} in room`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={!available || placing} type="button" onClick={() => onPlace(product)}>
+            <Plus aria-hidden="true" className="size-4" />
+            {placing ? 'Placing…' : 'Place'}
+          </button>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -255,40 +294,3 @@ function FilterSelect({ children, label, onChange, value }: { children: ReactNod
   );
 }
 
-function ProductCard({ onPlace, placing, product }: { onPlace: (product: FurnitureProduct) => void; placing: boolean; product: FurnitureProduct }) {
-  const available = product.stock > 0;
-  const categoryLabel = CATEGORY_LABELS[product.category] ?? product.category;
-  return (
-    <article className="group overflow-hidden rounded-card border border-border bg-surface-raised shadow-card transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-pop motion-reduce:transform-none motion-reduce:transition-none">
-      <div
-        className="relative h-24 overflow-hidden border-b border-border"
-        style={{ background: product.thumbnailGradient ?? 'var(--surface-muted)' }}
-        aria-hidden="true"
-      >
-        <span className="absolute bottom-2 left-3 rounded-pill bg-surface-raised/90 px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide text-text-muted uppercase shadow-card">
-          {categoryLabel}
-        </span>
-      </div>
-      <div className="p-3.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold leading-5 text-text">{product.name}</h3>
-            <p className="mt-0.5 truncate text-xs text-text-muted">{product.styleTags[0] ?? 'Classic'} · {product.colors[0] ?? 'Natural'} · {product.material}</p>
-          </div>
-          <span className="shrink-0 text-sm font-semibold text-accent-strong tabular-nums">{CURRENCY.format(product.price)}</span>
-        </div>
-        <p className="mt-2 border-t border-border pt-2 text-xs tabular-nums text-text-muted">{product.width} W × {product.depth} D × {product.height} H m</p>
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${available ? 'text-success' : 'text-error'}`}>
-            <span aria-hidden="true" className={`size-1.5 rounded-pill ${available ? 'bg-success' : 'bg-error'}`} />
-            {available ? `${product.stock} in stock` : 'Out of stock'}
-          </span>
-          <button aria-label={`Place ${product.name} in room`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors duration-200 hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={!available || placing} type="button" onClick={() => onPlace(product)}>
-            <Plus aria-hidden="true" className="size-4" />
-            {placing ? 'Placing…' : 'Place'}
-          </button>
-        </div>
-      </div>
-    </article>
-  );
-}

@@ -126,10 +126,10 @@ export function FurnitureInspector() {
     : [];
   return (
     <aside
-      className="flex min-h-0 flex-col overflow-hidden rounded-card border bg-surface shadow-card"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-surface"
       aria-labelledby="furniture-inspector-title"
     >
-      <div className="border-b bg-surface-raised px-4 py-4 sm:px-5">
+      <header className="border-b border-border px-4 py-4 sm:px-5">
         <div className="flex items-center gap-2">
           <Box className="size-4 text-accent" aria-hidden="true" />
           <h2 id="furniture-inspector-title" className="font-semibold tracking-tight text-text">
@@ -137,9 +137,9 @@ export function FurnitureInspector() {
           </h2>
         </div>
         <p className="mt-1 text-small text-text-muted">Select a piece to position, rotate, or secure it.</p>
-      </div>
+      </header>
 
-      <div className="min-h-0 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <section className="border-b px-4 py-3 sm:px-5" aria-labelledby="placed-items-title">
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <h3 id="placed-items-title" className="text-small font-semibold text-text">
@@ -148,7 +148,7 @@ export function FurnitureInspector() {
             <span className="text-small tabular-nums text-text-muted">{furniture.length}</span>
           </div>
           {furniture.length === 0 ? (
-            <p className="rounded-control bg-surface-muted px-3 py-3 text-small text-text-muted">
+            <p className="border-l-2 border-border py-2 pl-3 text-small text-text-muted">
               Add a marketplace piece to begin arranging your room.
             </p>
           ) : (
@@ -199,13 +199,25 @@ export function FurnitureInspector() {
                     {selectedProduct?.name ?? selectedItem.productId}
                   </h3>
                 </div>
-                <span
-                  className={`shrink-0 rounded-pill px-2.5 py-1 text-xs font-semibold ${
-                    selectedItem.locked ? 'bg-warning-soft text-warning' : 'bg-surface-muted text-text-muted'
-                  }`}
-                >
-                  {selectedItem.locked ? 'Locked' : 'Unlocked'}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={`rounded-pill px-2.5 py-1 text-xs font-semibold ${
+                      selectedItem.locked ? 'bg-warning-soft text-warning' : 'bg-surface-muted text-text-muted'
+                    }`}
+                  >
+                    {selectedItem.locked ? 'Locked' : 'Unlocked'}
+                  </span>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-control px-2 text-xs font-semibold text-accent-strong transition-colors hover:bg-accent-soft motion-reduce:transition-none"
+                    onClick={() => {
+                      selectItem(null);
+                      announce('Selection cleared.', 'success');
+                    }}
+                  >
+                    Clear selection
+                  </button>
+                </div>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-small">
                 <div>

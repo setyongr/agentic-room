@@ -63,11 +63,8 @@ export function AgentActivityFeed() {
   const entries = activity.slice(-VISIBLE_ACTIVITY_COUNT).reverse();
 
   return (
-    <aside
-      className="flex min-h-0 flex-col overflow-hidden rounded-card border bg-surface shadow-card"
-      aria-labelledby="agent-activity-title"
-    >
-      <div className="border-b bg-surface-raised px-4 py-4 sm:px-5">
+    <aside className="min-h-0" aria-labelledby="agent-activity-title">
+      <header className="border-b border-border pb-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-accent" strokeWidth={1.75} aria-hidden="true" />
@@ -84,7 +81,7 @@ export function AgentActivityFeed() {
         <p className="mt-1 text-small text-text-muted">
           Completed external-agent actions, kept separate from your room edits.
         </p>
-      </div>
+      </header>
 
       <ol
         role="log"
@@ -92,10 +89,11 @@ export function AgentActivityFeed() {
         aria-atomic="false"
         aria-relevant="additions text"
         aria-label="Recent external-agent actions"
+        className="divide-y divide-border"
       >
         {entries.length === 0 ? (
-          <li className="flex min-h-36 items-center px-4 py-5 sm:px-5">
-            <p className="rounded-control bg-surface-muted px-3 py-3 text-small leading-6 text-text-muted">
+          <li className="py-5">
+            <p className="text-small leading-6 text-text-muted">
               Ask an external agent to check the room or save a plan. Its completed actions will appear here.
             </p>
           </li>
@@ -113,9 +111,7 @@ export function AgentActivityFeed() {
             return (
               <li
                 key={entry.id}
-                className={`flex items-start gap-3 px-4 py-3 transition-[background-color,opacity,transform] duration-200 ease-out hover:-translate-y-px motion-reduce:transform-none motion-reduce:transition-none sm:px-5 ${
-                  isNewest ? 'bg-accent-soft/45 hover:bg-accent-soft' : 'bg-surface hover:bg-surface-muted'
-                }`}
+                className={`flex items-start gap-3 py-3 ${isNewest ? 'bg-accent-soft/45' : ''}`}
               >
                 <span
                   className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-pill ${
@@ -128,7 +124,7 @@ export function AgentActivityFeed() {
                   <span className="flex items-start justify-between gap-3">
                     <span className="text-small leading-5 text-text">{entry.message}</span>
                     {isNewest ? (
-                      <span className="shrink-0 rounded-pill bg-surface-raised px-2 py-0.5 text-xs font-semibold tracking-wider text-accent-strong uppercase">
+                      <span className="shrink-0 text-xs font-semibold tracking-wider text-accent-strong uppercase">
                         Latest
                       </span>
                     ) : null}

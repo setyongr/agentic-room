@@ -27,11 +27,11 @@ function RoomCanvasFallback() {
       <ambientLight intensity={1.15} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
         <planeGeometry args={[16, 16]} />
-        <meshStandardMaterial color="#ede4d2" roughness={1} />
+        <meshStandardMaterial color="#cbd5e1" roughness={1} />
       </mesh>
       <mesh position={[0, 0.62, 0]}>
         <boxGeometry args={[2.1, 1.24, 1.2]} />
-        <meshStandardMaterial color="#d8d1c2" roughness={0.88} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.88} />
       </mesh>
     </group>
   );
@@ -52,7 +52,7 @@ export function RoomCanvas() {
         onPointerMissed={handlePointerMissed}
         style={{ position: 'absolute', inset: 0 }}
       >
-        <color attach="background" args={['#f3ede2']} />
+        <color attach="background" args={['#e2e8f0']} />
         <Suspense fallback={<RoomCanvasFallback />}>
           <RoomScene />
           <CameraController mode={cameraMode} />

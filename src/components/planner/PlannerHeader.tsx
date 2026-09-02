@@ -1,18 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowUp,
   BadgeDollarSign,
   Camera,
-  CheckCircle2,
+  FolderOpen,
   Orbit,
   PanelLeft,
   PanelTop,
-  TriangleAlert,
+  Save,
+  ShoppingBag,
+  X,
 } from 'lucide-react';
 import type { CameraMode } from '@/domain/types';
-import { selectTotals, selectValidationValid } from '@/store/selectors';
+import { selectCartCount, selectTotals } from '@/store/selectors';
 import { useRoomStore } from '@/store/roomStore';
 
 const cameras: readonly { mode: CameraMode; label: string; Icon: typeof Camera }[] = [
@@ -22,178 +24,229 @@ const cameras: readonly { mode: CameraMode; label: string; Icon: typeof Camera }
   { mode: 'side', label: 'Side', Icon: PanelLeft },
 ];
 
-const activityFeedback = {
-  room_inspected: 'Agent reviewed the room.',
-  products_searched: 'Agent reviewed marketplace options.',
-  layout_checked: 'Agent checked the layout.',
-  total_calculated: 'Agent recalculated marketplace spend.',
-  alternatives_found: 'Agent reviewed lower-cost alternatives.',
-  item_added: 'Agent added an item.',
-  item_moved: 'Agent moved an item.',
-  item_rotated: 'Agent rotated an item.',
-  item_removed: 'Agent removed an item.',
-  item_replaced: 'Agent replaced an item.',
-  item_locked: 'Agent locked an item.',
-  item_unlocked: 'Agent unlocked an item.',
-  design_saved: 'Agent saved the design.',
-  design_restored: 'Agent restored the design.',
-  cart_item_added: 'Agent added an item to the cart.',
-  checkout_completed: 'Agent completed checkout.',
-  budget_updated: 'Agent updated the budget.',
-} as const;
+const money = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
 
-function money(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
+interface PlannerHeaderProps {
+  onOpenCart: () => void;
+  onOpenDesigns: () => void;
 }
 
-export function PlannerHeader() {
+/** Compact navigation and design actions for the workspace. */
+export function PlannerHeader({ onOpenCart, onOpenDesigns }: PlannerHeaderProps) {
   const totals = useRoomStore(selectTotals);
-  const valid = useRoomStore(selectValidationValid);
-  const activity = useRoomStore((state) => state.activity);
-  const lastMutation = useRoomStore((state) => state.lastMutation);
-  const cameraMode = useRoomStore((state) => state.cameraMode);
-  const setCameraMode = useRoomStore((state) => state.setCameraMode);
+  const cartCount = useRoomStore(selectCartCount);
   const setBudget = useRoomStore((state) => state.setBudget);
-  const [budgetInput, setBudgetInput] = useState(String(totals.budget));
-  const [message, setMessage] = useState('');
-  const [feedbackMutation, setFeedbackMutation] = useState<number | null>(null);
-  const [feedbackActive, setFeedbackActive] = useState(false);
-  const previousMutation = useRef(lastMutation);
-  const previousActivityId = useRef(activity.at(-1)?.id);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
+  const [budgetMessage, setBudgetMessage] = useState('');
+  const budgetDialogId = useId();
+  const budgetInputRef = useRef<HTMLInputElement>(null);
+  const budgetTriggerRef = useRef<HTMLButtonElement>(null);
+  const budgetDialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  function closeBudget() {
+    setBudgetOpen(false);
+    budgetTriggerRef.current?.focus();
+  }
+
+  function openBudget() {
     setBudgetInput(String(totals.budget));
-  }, [totals.budget]);
+    setBudgetMessage('');
+    setBudgetOpen(true);
+  }
 
   useEffect(() => {
-    if (lastMutation === previousMutation.current) {
-      return;
-    }
+    if (!budgetOpen) return;
 
-    const latestActivity = activity.at(-1);
-    const hasNewActivity = latestActivity?.id !== previousActivityId.current;
+    budgetInputRef.current?.focus();
 
-    previousMutation.current = lastMutation;
-    previousActivityId.current = latestActivity?.id;
-    setFeedbackMutation(lastMutation);
-    setFeedbackActive(true);
-    setMessage(
-      hasNewActivity && latestActivity !== undefined
-        ? `${activityFeedback[latestActivity.type]} Budget and layout status refreshed.`
-        : 'Budget and layout status refreshed.',
-    );
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeBudget();
+        return;
+      }
+      if (event.key !== 'Tab') return;
 
-    const timer = setTimeout(() => setFeedbackActive(false), 240);
-    return () => clearTimeout(timer);
-  }, [activity, lastMutation]);
+      const focusable = budgetDialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable === undefined || focusable.length === 0) return;
+
+      const first = focusable.item(0);
+      const last = focusable.item(focusable.length - 1);
+      if (first === null || last === null) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [budgetOpen]);
 
   function applyBudget(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const budget = Number(budgetInput);
-    const result = setBudget(budget, 'human');
-    if (!result.ok) {
-      setMessage(result.message);
+    if (budgetInput.trim() === '' || !Number.isFinite(budget) || budget < 0) {
+      setBudgetMessage('Enter a non-negative budget.');
       return;
     }
-    setBudgetInput(String(result.data.budget));
-    setMessage(`Budget applied: ${money(result.data.budget)}.`);
+
+    const result = setBudget(budget, 'human');
+    setBudgetMessage(result.ok ? 'Budget updated.' : result.message);
   }
 
-  const budgetTone = totals.overBudget
-    ? 'bg-error-soft text-error'
-    : 'bg-success-soft text-success';
-  const budgetLabel = totals.overBudget
-    ? `${money(Math.abs(totals.remaining))} over budget`
-    : `${money(totals.remaining)} remaining`;
-
-  const feedbackClass = feedbackActive
-    ? 'bg-accent-soft motion-safe:animate-[pulse_240ms_ease-out_1] motion-reduce:animate-none'
-    : '';
-
   return (
-    <header className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-card)]">
-      <div className="flex flex-col gap-5 px-4 py-4 sm:px-5 sm:py-5 xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-widest text-accent-strong uppercase">
-            Hearth & Form
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-xl font-semibold tracking-tight text-text sm:text-subheading">Living room planner</h1>
-            <span className="hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
-            <p className="text-sm text-text-muted">Shape a room that feels considered, before it comes home.</p>
+    <>
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface px-3 sm:px-5">
+        <h1 className="sr-only">Living room planner</h1>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold tracking-tight text-text">Hearth &amp; Form</p>
+            <p className="hidden text-xs text-text-muted sm:block">Living room plan</p>
           </div>
+          <span className="hidden h-5 w-px bg-border md:block" aria-hidden="true" />
+          <nav aria-label="Planner actions" className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onOpenDesigns}
+              aria-label="Open designs"
+              className="inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-medium text-text-muted transition-colors hover:bg-surface-muted hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+            >
+              <FolderOpen className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Designs</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenCart}
+              aria-label={`Open cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-medium text-text-muted transition-colors hover:bg-surface-muted hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+            >
+              <ShoppingBag className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Cart</span>
+              <span className="min-w-4 rounded-control bg-surface-muted px-1 text-center text-xs font-semibold tabular-nums text-text" aria-hidden="true">{cartCount}</span>
+            </button>
+          </nav>
         </div>
 
-        <div className="flex flex-wrap items-start gap-3 xl:justify-end">
-          <section aria-label="Design budget" className="w-full rounded-[var(--radius-control)] border border-border bg-surface-raised px-3 py-3 shadow-[var(--shadow-card)] sm:w-80">
-            <div className="flex items-baseline justify-between gap-4">
-              <p className="text-xs font-semibold tracking-wider text-text-muted uppercase">Marketplace spend</p>
-              <p
-                key={`marketplace-spend-${feedbackMutation ?? 'initial'}`}
-                className={`rounded-control px-1 font-mono text-sm font-semibold tabular-nums text-text ${feedbackClass}`}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            ref={budgetTriggerRef}
+            type="button"
+            onClick={openBudget}
+            aria-expanded={budgetOpen}
+            aria-controls={budgetOpen ? budgetDialogId : undefined}
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-control px-2.5 text-xs font-semibold tabular-nums transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${totals.overBudget ? 'text-error' : 'text-text'}`}
+            aria-label={`Marketplace spend ${money.format(totals.newTotal)} of ${money.format(totals.budget)}. Edit budget.`}
+          >
+            <BadgeDollarSign className="size-4" aria-hidden="true" />
+            <span className="hidden lg:inline">{money.format(totals.newTotal)} / {money.format(totals.budget)}</span>
+            <span className="lg:hidden">{money.format(totals.newTotal)}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onOpenDesigns}
+            className="inline-flex min-h-11 items-center gap-2 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong motion-reduce:transition-none"
+          >
+            <Save className="size-4" aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">Save design</span>
+          </button>
+        </div>
+      </header>
+
+      {budgetOpen ? (
+        <div className="fixed inset-0 z-50" role="presentation">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full cursor-default"
+            aria-label="Close budget editor"
+            onClick={closeBudget}
+          />
+          <div
+            ref={budgetDialogRef}
+            id={budgetDialogId}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`${budgetDialogId}-title`}
+            className="absolute inset-x-3 top-20 rounded-control border border-border bg-surface p-4 shadow-pop sm:inset-x-auto sm:right-5 sm:w-80"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 id={`${budgetDialogId}-title`} className="text-sm font-semibold text-text">Edit budget</h2>
+              <button
+                type="button"
+                onClick={closeBudget}
+                className="inline-flex size-11 items-center justify-center rounded-control text-text-muted transition-colors hover:bg-surface-muted hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+                aria-label="Close budget editor"
               >
-                {money(totals.newTotal)} <span className="text-text-faint">/</span> {money(totals.budget)}
-              </p>
+                <X className="size-4" aria-hidden="true" />
+              </button>
             </div>
-            <p
-              key={`budget-remaining-${feedbackMutation ?? 'initial'}`}
-              className={`mt-1 inline-flex rounded-pill px-2 py-0.5 text-xs font-semibold ${budgetTone} ${feedbackActive ? 'ring-1 ring-accent motion-safe:animate-[pulse_240ms_ease-out_1] motion-reduce:animate-none' : ''}`}
-            >
-              {budgetLabel}
-            </p>
-            <form className="mt-3 flex gap-2" onSubmit={applyBudget}>
-              <label className="sr-only" htmlFor="planner-budget">Budget in US dollars</label>
-              <div className="flex min-w-0 flex-1 items-center rounded-control border border-border bg-surface-muted px-2">
-                <BadgeDollarSign className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
+            <form className="mt-4 space-y-3" onSubmit={applyBudget}>
+              <label className="block space-y-1.5 text-sm font-medium text-text" htmlFor={`${budgetDialogId}-input`}>
+                Budget
                 <input
-                  id="planner-budget"
-                  className="min-h-11 w-full bg-transparent px-1 text-sm font-medium tabular-nums text-text outline-none"
-                  inputMode="decimal"
-                  min="0"
-                  step="50"
+                  ref={budgetInputRef}
+                  id={`${budgetDialogId}-input`}
                   type="number"
+                  min="0"
+                  step="1"
+                  inputMode="decimal"
                   value={budgetInput}
                   onChange={(event) => setBudgetInput(event.target.value)}
+                  className="block min-h-11 w-full rounded-control border border-border bg-surface px-3 text-sm tabular-nums text-text outline-none transition-colors placeholder:text-text-muted focus:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
                 />
-              </div>
-              <button type="submit" className="min-h-11 rounded-[var(--radius-control)] bg-accent px-3 text-sm font-semibold text-on-accent transition-colors duration-200 hover:bg-accent-strong motion-reduce:transition-none">
-                Apply
+              </label>
+              <p className={`text-sm font-medium tabular-nums ${totals.overBudget ? 'text-error' : 'text-text-muted'}`}>
+                {totals.overBudget
+                  ? `${money.format(Math.abs(totals.remaining))} over budget`
+                  : `${money.format(totals.remaining)} remaining`}
+              </p>
+              <button
+                type="submit"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong motion-reduce:transition-none"
+              >
+                Apply budget
               </button>
+              <p className="min-h-5 text-sm text-text-muted" role="status" aria-live="polite">{budgetMessage}</p>
             </form>
-          </section>
-
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none sm:flex-nowrap">
-            <div
-              key={`layout-validation-${feedbackMutation ?? 'initial'}`}
-              className={`inline-flex min-h-11 items-center gap-2 rounded-pill px-3 text-sm font-medium ${valid ? 'bg-success-soft text-success' : 'bg-error-soft text-error'} ${feedbackActive ? 'ring-1 ring-accent motion-safe:animate-[pulse_240ms_ease-out_1] motion-reduce:animate-none' : ''}`}
-            >
-              {valid ? <CheckCircle2 className="size-4" aria-hidden="true" /> : <TriangleAlert className="size-4" aria-hidden="true" />}
-              {valid ? 'Layout valid' : 'Review layout'}
-            </div>
-            <div className="flex shrink-0 rounded-[var(--radius-control)] border border-border bg-surface-raised p-1 shadow-[var(--shadow-card)]" aria-label="Room camera">
-              {cameras.map(({ mode, label, Icon }) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-pressed={cameraMode === mode}
-                  onClick={() => setCameraMode(mode)}
-                  className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] px-2 text-xs font-semibold transition-colors duration-200 motion-reduce:transition-none ${cameraMode === mode ? 'bg-accent text-on-accent shadow-[var(--shadow-card)]' : 'text-text-muted hover:bg-surface-muted hover:text-text'}`}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
           </div>
         </div>
-      </div>
-      <p role="status" aria-live="polite" className="border-t border-border px-4 py-2 text-sm text-text-muted sm:px-5">
-        {message}
-      </p>
-    </header>
+      ) : null}
+    </>
+  );
+}
+
+/** Camera choices live with the room stage, not the global navigation. */
+export function RoomCameraControls() {
+  const cameraMode = useRoomStore((state) => state.cameraMode);
+  const setCameraMode = useRoomStore((state) => state.setCameraMode);
+
+  return (
+    <div className="flex rounded-control border border-border bg-surface/95 p-1" aria-label="Room camera">
+      {cameras.map(({ mode, label, Icon }) => (
+        <button
+          key={mode}
+          type="button"
+          aria-label={`${label} camera`}
+          aria-pressed={cameraMode === mode}
+          onClick={() => setCameraMode(mode)}
+          className={`inline-flex size-11 items-center justify-center rounded-control transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${cameraMode === mode ? 'bg-accent text-on-accent' : 'text-text-muted hover:bg-surface-muted hover:text-text'}`}
+        >
+          <Icon className="size-4" aria-hidden="true" />
+          <span className="sr-only">{label}</span>
+        </button>
+      ))}
+    </div>
   );
 }

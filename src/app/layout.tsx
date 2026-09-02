@@ -12,14 +12,14 @@ export const metadata: Metadata = {
     template: `%s · ${SITE_NAME}`,
   },
   description:
-    "A warm, tactile 3D home on the web — build, furnish, and inhabit spatial rooms in your browser.",
+    "Plan and furnish a living room in 3D — in your browser, with your browser assistant.",
   creator: SITE_NAME,
   formatDetection: { telephone: false },
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
     title: SITE_NAME,
-    description: "Build, furnish, and inhabit warm 3D rooms in your browser.",
+    description: "A 3D room planner your browser assistant can drive.",
     locale: "en_US",
   },
   robots: { index: true, follow: true },
@@ -30,8 +30,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f1e7" },
-    { media: "(prefers-color-scheme: dark)", color: "#191510" },
+    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
   ],
 };
 

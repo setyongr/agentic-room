@@ -1,73 +1,53 @@
 @import "tailwindcss";
 
-/* ---------------------------------------------------------------------------
- * WebMCP design tokens — warm modern consumer interior.
- *
- * Palette lives in plain CSS custom properties so it can respond to
- * prefers-color-scheme at runtime; `@theme inline` maps the tokens onto
- * Tailwind utilities (bg-background, bg-surface, text-text, text-muted,
- * border-border, accent-*, error-*, success-*, warning-*, focus-ring).
- * ------------------------------------------------------------------------- */
-
+/* Tailwind-facing tokens for the focused slate-and-indigo workspace. */
 @theme {
-  /* System type stack — no remote font dependencies */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 
-  /* Static shape tokens (mode-independent) */
-  --radius-card: 1.25rem;
-  --radius-control: 0.625rem;
+  --radius-card: 0.75rem;
+  --radius-control: 0.5rem;
   --radius-pill: 999px;
 
-  --shadow-card: 0 1px 2px rgb(66 46 28 / 0.05),
-    0 12px 32px -16px rgb(66 46 28 / 0.22);
-  --shadow-pop: 0 4px 12px rgb(66 46 28 / 0.08),
-    0 28px 56px -20px rgb(66 46 28 / 0.3);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05),
+    0 8px 24px -16px rgb(15 23 42 / 0.22);
+  --shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28);
 }
 
 :root {
-  /* Warm neutral surfaces */
-  --background: #f7f1e7; /* warm ivory canvas */
-  --surface: #fdfaf3; /* raised card */
-  --surface-raised: #fffdf8; /* topmost surface */
-  --surface-muted: #efe7d9; /* inset wells */
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #f1f5f9;
 
-  /* Text */
-  --text: #2a241d;
-  --text-muted: #6d6051;
-  --text-faint: #a2927d;
-  --on-accent: #fdf6ec;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+  --on-accent: #ffffff;
 
-  /* Hairlines */
-  --border: #e5dac6;
+  --border: #e2e8f0;
 
-  /* Accent — terracotta */
-  --accent: #b05f38; /* interactive elements, large text */
-  --accent-strong: #8c4523; /* pressed state, small text on light */
-  --accent-soft: #f2e0d1; /* tint fills */
+  --accent: #4f46e5;
+  --accent-strong: #4338ca;
+  --accent-soft: #eef2ff;
 
-  /* Status */
-  --error: #b03e2e;
-  --error-soft: #f6ddd5;
-  --success: #5e7a4b;
-  --success-soft: #e5ebd8;
-  --warning: #a06f26;
-  --warning-soft: #f3e7cd;
+  --error: #dc2626;
+  --error-soft: #fef2f2;
+  --success: #059669;
+  --success-soft: #ecfdf5;
+  --warning: #d97706;
+  --warning-soft: #fffbeb;
 
-  /* Visible focus */
-  --focus-ring: rgb(176 95 56 / 0.45);
+  --focus-ring: rgb(79 70 229 / 0.4);
 
-  /* Layout */
   --container-max: 72rem;
-  --planner-max: 80rem;
   --container-pad: clamp(1rem, 3vw, 2rem);
-  /* Responsive type scale (fluid) */
   --text-display: clamp(2.25rem, 1.25rem + 3vw, 3.5rem);
   --text-heading: clamp(1.5rem, 1.125rem + 1.25vw, 2.125rem);
   --text-subheading: clamp(1.125rem, 1rem + 0.5vw, 1.375rem);
-  --text-body: clamp(1rem, 0.9375rem + 0.25vw, 1.125rem);
+  --text-body: 1rem;
   --text-small: 0.875rem;
-  --leading-body: 1.65;
+  --leading-body: 1.5;
 }
 
 /* Wider display scale on large viewports */
@@ -77,33 +57,33 @@
   }
 }
 
-/* Dark mode — warm charcoal, mirror-image semantics */
+/* A cool slate dark mode preserves the same hierarchy. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #191510;
-    --surface: #211c15;
-    --surface-raised: #2a231a;
-    --surface-muted: #322a1f;
+    --background: #0f172a;
+    --surface: #111827;
+    --surface-raised: #1e293b;
+    --surface-muted: #1e293b;
 
-    --text: #ece3d4;
-    --text-muted: #b3a48f;
-    --text-faint: #857661;
-    --on-accent: #1c140c;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
+    --on-accent: #ffffff;
 
-    --border: #3a3022;
+    --border: #334155;
 
-    --accent: #cf8a5e;
-    --accent-strong: #e0a07a;
-    --accent-soft: #3c2a1e;
+    --accent: #6366f1;
+    --accent-strong: #818cf8;
+    --accent-soft: #312e81;
 
-    --error: #e0786b;
-    --error-soft: #452420;
-    --success: #96ad80;
-    --success-soft: #2b3523;
-    --warning: #d3a458;
-    --warning-soft: #3a2f1b;
+    --error: #f87171;
+    --error-soft: #450a0a;
+    --success: #34d399;
+    --success-soft: #052e2b;
+    --warning: #fbbf24;
+    --warning-soft: #451a03;
 
-    --focus-ring: rgb(207 138 94 / 0.5);
+    --focus-ring: rgb(129 140 248 / 0.55);
   }
 
   html {
@@ -135,7 +115,7 @@
 }
 
 @layer base {
-  /* Warm hairline border color by default */
+  /* Slate hairline border color by default */
   *,
   ::before,
   ::after {

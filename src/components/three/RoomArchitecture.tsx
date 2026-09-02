@@ -4,8 +4,8 @@ import type { RoomData, RoomDimensions, RoomOpening, ValidationIssue, WallSide }
 import { WALL_SIDES } from '@/domain/types';
 
 /**
- * Static architecture of the room: warm floor, cream walls, baseboards, and
- * real openings (entry doorway, glazed balcony door, window) cut out of the
+ * Static architecture of the room: slate floor, off-white walls, baseboards,
+ * and real openings (entry doorway, glazed balcony door, window) cut out of the
  * walls as gaps with frames, glass, sills/thresholds, and floor clearances.
  *
  * Geometry is driven by `RoomData` (dimensions + openings) rather than
@@ -61,7 +61,7 @@ const FLOOR_SINK = 0.002;
 const GRID_TILE_METERS = 0.5;
 /** Floor texture resolution in pixels per meter. */
 const FLOOR_TEX_PPM = 128;
-const CLEARANCE_TINT = '#bfa88b';
+const CLEARANCE_TINT = '#94a3b8';
 const BLOCKED_TINT = '#c84436';
 
 type RoomBoxKind =
@@ -147,7 +147,7 @@ function wallPerp(side: WallSide, width: number, depth: number): number {
 }
 
 /**
- * Warm matte-oak floor finish painted once into a canvas texture. Staggered
+ * Cool light-slate floor finish painted once into a canvas texture. Staggered
  * boards and a quiet perimeter joint make the floor read as a material rather
  * than a planning grid, while keeping the render to one texture and no assets.
  */
@@ -159,11 +159,11 @@ function createFloorTexture(width: number, depth: number): THREE.CanvasTexture {
   if (!ctx) {
     throw new Error('RoomArchitecture: 2D canvas context unavailable');
   }
-  ctx.fillStyle = '#cdb798';
+  ctx.fillStyle = '#cbd5e1';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const board = GRID_TILE_METERS * FLOOR_TEX_PPM;
-  ctx.strokeStyle = 'rgba(94, 67, 43, 0.2)';
+  ctx.strokeStyle = 'rgba(71, 85, 105, 0.2)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let y = board; y < canvas.height; y += board) {
@@ -179,7 +179,7 @@ function createFloorTexture(width: number, depth: number): THREE.CanvasTexture {
   }
   ctx.stroke();
 
-  ctx.strokeStyle = 'rgba(94, 67, 43, 0.3)';
+  ctx.strokeStyle = 'rgba(71, 85, 105, 0.3)';
   ctx.lineWidth = 2;
   ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
 
@@ -195,16 +195,16 @@ function createRoomMaterials({ width, depth }: RoomDimensions): RoomMaterials {
     floorTexture,
     floor: new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.88, metalness: 0 }),
     wall: new THREE.MeshStandardMaterial({
-      color: '#f0e8da',
+      color: '#f8fafc',
       roughness: 0.97,
       metalness: 0,
       side: THREE.DoubleSide,
     }),
-    baseboard: new THREE.MeshStandardMaterial({ color: '#fbf6ed', roughness: 0.88, metalness: 0 }),
-    frame: new THREE.MeshStandardMaterial({ color: '#75553c', roughness: 0.62, metalness: 0.04 }),
-    stone: new THREE.MeshStandardMaterial({ color: '#d5c9b5', roughness: 0.8, metalness: 0 }),
+    baseboard: new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.88, metalness: 0 }),
+    frame: new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.62, metalness: 0.04 }),
+    stone: new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.8, metalness: 0 }),
     glass: new THREE.MeshStandardMaterial({
-      color: '#b7d1ca',
+      color: '#bae6fd',
       transparent: true,
       opacity: 0.38,
       roughness: 0.16,
