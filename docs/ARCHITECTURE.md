@@ -134,7 +134,7 @@ warnings inform but do not invalidate.
   name/timestamps; restore validates shape and rejects duplicates.
 - `Cart` — lines of marketplace items priced from the catalog, `status:
   active | checked_out`; only placed marketplace instances may be added.
-- `ActivityEntry` — `id`, `type` (17 fixed kinds), `message` (fixed
+- `ActivityEntry` — `id`, `type` (19 fixed kinds), `message` (fixed
   template), optional `instanceId`/`productId`/`amount`; bounded feed.
 
 ## 4. State and actions (`src/store/roomStore.ts`)

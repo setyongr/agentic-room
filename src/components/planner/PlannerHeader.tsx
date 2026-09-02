@@ -192,7 +192,7 @@ export function PlannerHeader({ onOpenCart, onOpenDesigns }: PlannerHeaderProps)
                 <X className="size-4" aria-hidden="true" />
               </button>
             </div>
-            <form className="mt-4 space-y-3" onSubmit={applyBudget}>
+            <form className="mt-4 space-y-3" noValidate onSubmit={applyBudget}>
               <label className="block space-y-1.5 text-sm font-medium text-text" htmlFor={`${budgetDialogId}-input`}>
                 Budget
                 <input

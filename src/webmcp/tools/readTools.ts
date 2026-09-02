@@ -537,6 +537,7 @@ function getBudgetPressureTool(): ModelContextTool {
       const args = readObjectInput(input);
       if (!args.ok) return toolFail(args.code, args.message);
       const result = useRoomStore.getState().getBudgetPressure();
+      useRoomStore.getState().recordAgentActivity({ type: 'budget_pressure_checked' });
       const truncated = result.replaceable.length > MAX_LIST_ITEMS;
       return toolOk({
         status: result.status,
@@ -631,7 +632,9 @@ function getSavedDesignsTool(): ModelContextTool {
     (input) => {
       const args = readObjectInput(input);
       if (!args.ok) return toolFail(args.code, args.message);
-      const savedDesigns = useRoomStore.getState().savedDesigns;
+      const state = useRoomStore.getState();
+      const savedDesigns = state.savedDesigns;
+      state.recordAgentActivity({ type: 'designs_inspected' });
       const truncated = savedDesigns.length > MAX_LIST_ITEMS;
       return toolOk({
         designCount: savedDesigns.length,

@@ -133,6 +133,8 @@ expected numbers. Acceptance:
 - Furnish/Edit opens the rail as a bottom sheet with a scrim; the closed
   sheet is not reachable by keyboard (inert); Escape, scrim, and the close
   button dismiss it and restore focus to the opener.
+- The open Furnish sheet scrolls vertically through the full furniture
+  catalog on touch and with a trackpad, without causing document-level scroll.
 - Activity opens the drawer as a bottom sheet; Designs/Cart behave the same.
 - No horizontal overflow at 375 px; canvas fills the stage.
 

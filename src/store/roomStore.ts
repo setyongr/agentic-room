@@ -68,8 +68,7 @@ export type ActionOrigin = 'human' | 'agent';
  * The store composes the feed message from a fixed per-event template and
  * its own live state; callers supply only the event discriminator and
  * optional structured fields — never free-form text — so the activity feed
- * can never contain agent reasoning. Each event maps to the closest stable
- * ActivityType, keeping existing feed consumers unchanged.
+ * can never contain agent reasoning.
  */
 export type AgentActivityEvent =
   /** A full room-state inspection (get_room_state). */
@@ -77,7 +76,11 @@ export type AgentActivityEvent =
   /** A placement-capacity inspection for one category (get_available_placement_zones). */
   | { type: 'zones_inspected'; category: FurnitureCategory }
   /** A single catalog product view (get_product). */
-  | { type: 'product_viewed'; productId: string };
+  | { type: 'product_viewed'; productId: string }
+  /** A budget-pressure read (get_budget_pressure). */
+  | { type: 'budget_pressure_checked' }
+  /** A saved-designs read (get_saved_designs). */
+  | { type: 'designs_inspected' };
 /**
  * Fixed session epoch (ISO 8601). Every id and timestamp a session mints is
  * derived from this epoch plus the session sequence, so replaying the same
@@ -338,13 +341,9 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
     searchProducts: (args, origin = 'human') => {
       const result = catalog.searchProducts(args);
       if (origin === 'agent') {
-        const query = args.filters.query?.trim();
         commit(get(), {}, origin, {
           type: 'products_searched',
-          message:
-            query !== undefined && query.length > 0
-              ? `Searched the marketplace for “${query}”: ${result.total} match${result.total === 1 ? '' : 'es'}`
-              : `Searched the marketplace: ${result.total} match${result.total === 1 ? '' : 'es'}`,
+          message: `Searched the marketplace: ${result.total} match${result.total === 1 ? '' : 'es'}`,
           amount: result.total,
         });
       }
@@ -416,6 +415,27 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
           });
           return;
         }
+        case 'budget_pressure_checked': {
+          const result = pricing.getBudgetPressure(prev.furniture, prev.budget);
+          commit(prev, {}, 'agent', {
+            type: 'budget_pressure_checked',
+            message:
+              result.status === 'over_budget'
+                ? `Checked budget pressure: $${result.amountOver.toFixed(2)} over budget`
+                : result.status === 'at_budget'
+                  ? 'Checked budget pressure: exactly at budget'
+                  : `Checked budget pressure: $${result.remaining.toFixed(2)} remaining`,
+            amount: result.status === 'over_budget' ? result.amountOver : result.remaining,
+          });
+          return;
+        }
+        case 'designs_inspected':
+          commit(prev, {}, 'agent', {
+            type: 'designs_inspected',
+            message: `Inspected saved designs: ${prev.savedDesigns.length} saved`,
+            amount: prev.savedDesigns.length,
+          });
+          return;
       }
     },
 
@@ -589,7 +609,7 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
             id: mint.id,
             timestamp: mint.timestamp,
             type: 'design_saved',
-            message: `Saved design “${name}”`,
+            message: 'Saved a design snapshot',
           }),
         );
         updates.sessionSequence = sequence + 1;
@@ -613,7 +633,7 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
       if (!restored.ok) return restored;
       commit(prev, restoreDesign(restored.data), origin, {
         type: 'design_restored',
-        message: `Restored design “${saved.name}”`,
+        message: 'Restored a saved design',
       });
       return restored;
     },

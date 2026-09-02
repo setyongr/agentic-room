@@ -101,6 +101,8 @@ export type CameraMode = (typeof CAMERA_MODES)[number];
 export const ACTIVITY_TYPES = [
   'room_inspected',
   'products_searched',
+  'budget_pressure_checked',
+  'designs_inspected',
   'layout_checked',
   'total_calculated',
   'alternatives_found',

@@ -169,7 +169,7 @@ export function PlannerShell() {
               <X className="size-5" aria-hidden="true" />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:overflow-hidden">
             {sidebarMode === 'catalog' ? <MarketplacePanel /> : <FurnitureInspector />}
           </div>
         </aside>

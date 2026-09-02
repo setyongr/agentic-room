@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Eye,
+  FolderOpen,
   LockKeyhole,
   PackageCheck,
   Search,
@@ -34,11 +35,14 @@ const MONEY_ACTIVITY_TYPES: Partial<Record<ActivityType, true>> = {
   item_added: true,
   item_replaced: true,
   budget_updated: true,
+  budget_pressure_checked: true,
 };
 
 const activityIcons: Record<ActivityType, LucideIcon> = {
   room_inspected: Eye,
   products_searched: Search,
+  budget_pressure_checked: CircleDollarSign,
+  designs_inspected: FolderOpen,
   layout_checked: ClipboardCheck,
   total_calculated: Calculator,
   alternatives_found: Sparkles,
