@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * WebMCP design tokens — warm modern consumer interior.
+ *
+ * Palette lives in plain CSS custom properties so it can respond to
+ * prefers-color-scheme at runtime; `@theme inline` maps the tokens onto
+ * Tailwind utilities (bg-background, bg-surface, text-text, text-muted,
+ * border-border, accent-*, error-*, success-*, warning-*, focus-ring).
+ * ------------------------------------------------------------------------- */
+
+@theme {
+  /* System type stack — no remote font dependencies */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+
+  /* Static shape tokens (mode-independent) */
+  --radius-card: 1.25rem;
+  --radius-control: 0.625rem;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgb(66 46 28 / 0.05),
+    0 12px 32px -16px rgb(66 46 28 / 0.22);
+  --shadow-pop: 0 4px 12px rgb(66 46 28 / 0.08),
+    0 28px 56px -20px rgb(66 46 28 / 0.3);
+}
+
+:root {
+  /* Warm neutral surfaces */
+  --background: #f7f1e7; /* warm ivory canvas */
+  --surface: #fdfaf3; /* raised card */
+  --surface-raised: #fffdf8; /* topmost surface */
+  --surface-muted: #efe7d9; /* inset wells */
+
+  /* Text */
+  --text: #2a241d;
+  --text-muted: #6d6051;
+  --text-faint: #a2927d;
+  --on-accent: #fdf6ec;
+
+  /* Hairlines */
+  --border: #e5dac6;
+
+  /* Accent — terracotta */
+  --accent: #b05f38; /* interactive elements, large text */
+  --accent-strong: #8c4523; /* pressed state, small text on light */
+  --accent-soft: #f2e0d1; /* tint fills */
+
+  /* Status */
+  --error: #b03e2e;
+  --error-soft: #f6ddd5;
+  --success: #5e7a4b;
+  --success-soft: #e5ebd8;
+  --warning: #a06f26;
+  --warning-soft: #f3e7cd;
+
+  /* Visible focus */
+  --focus-ring: rgb(176 95 56 / 0.45);
+
+  /* Layout */
+  --container-max: 72rem;
+  --planner-max: 80rem;
+  --container-pad: clamp(1rem, 3vw, 2rem);
+  /* Responsive type scale (fluid) */
+  --text-display: clamp(2.25rem, 1.25rem + 3vw, 3.5rem);
+  --text-heading: clamp(1.5rem, 1.125rem + 1.25vw, 2.125rem);
+  --text-subheading: clamp(1.125rem, 1rem + 0.5vw, 1.375rem);
+  --text-body: clamp(1rem, 0.9375rem + 0.25vw, 1.125rem);
+  --text-small: 0.875rem;
+  --leading-body: 1.65;
+}
+
+/* Wider display scale on large viewports */
+@media (min-width: 64rem) {
+  :root {
+    --text-display: clamp(2.75rem, 1.5rem + 2.5vw, 4.25rem);
+  }
+}
+
+/* Dark mode — warm charcoal, mirror-image semantics */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #191510;
+    --surface: #211c15;
+    --surface-raised: #2a231a;
+    --surface-muted: #322a1f;
+
+    --text: #ece3d4;
+    --text-muted: #b3a48f;
+    --text-faint: #857661;
+    --on-accent: #1c140c;
+
+    --border: #3a3022;
+
+    --accent: #cf8a5e;
+    --accent-strong: #e0a07a;
+    --accent-soft: #3c2a1e;
+
+    --error: #e0786b;
+    --error-soft: #452420;
+    --success: #96ad80;
+    --success-soft: #2b3523;
+    --warning: #d3a458;
+    --warning-soft: #3a2f1b;
+
+    --focus-ring: rgb(207 138 94 / 0.5);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+}
+
+/* Map color tokens onto Tailwind utilities (mode-aware via var()) */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-muted: var(--surface-muted);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-on-accent: var(--on-accent);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-error: var(--error);
+  --color-error-soft: var(--error-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-focus-ring: var(--focus-ring);
+}
+
+@layer base {
+  /* Warm hairline border color by default */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: var(--background);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible, theme-aware focus indicator */
+  :focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+}
+
+/* Motion: smooth scrolling only when the user permits animation */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Reduced motion: collapse all animation and transition durations.
+   Un-layered so it always wins over component-level utilities. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
