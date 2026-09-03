@@ -1,9 +1,9 @@
 # Deployment and public-release checklist
 
 AgenticRoom has no application backend, database, account system, or API-key
-requirement. Room data lives in the browser and resets on reload. Hosting is
-not selected yet; this document prepares the existing Next.js build without
-adding a provider dependency or publishing anything.
+requirement. Room data lives in the browser and resets on reload. Sites is
+configured for a private static deployment. Public sharing requires separate
+approval; a private deployment is not a judge-accessible submission URL.
 
 ## Current build contract
 
@@ -14,16 +14,27 @@ adding a provider dependency or publishing anything.
 | Node.js | 20.9+ as declared in `package.json`; choose a supported LTS at deployment time |
 | Install | `bun install --frozen-lockfile` |
 | Build | `bun run build` |
+| Sites build | `bun run build:sites` (sets `SITES_STATIC_EXPORT=1`) |
 | Start | `bun run start` (`next start`) |
-| Output | `.next/` — Next.js build, not a static-host upload directory |
+| Output | `.next/` for standard builds; `out/` for Sites builds |
 | Required app environment variables | None |
 | Public assets | `public/models/` and `public/previews/` |
 
-The current configuration supports a Next.js-aware host or Node.js server.
-Although the main route is prerendered, that does **not** make `.next/` a
-standalone static export. If a static-only host is selected later, explicitly
-configure and verify an export then. Do not assume an `out/` directory exists.
-No provider CLI, adapter, Docker image, or deployment credential is needed now.
+The default configuration still supports a Next.js-aware host or Node.js
+server. The Sites build opts into `output: "export"` and emits `out/`;
+`.openai/hosting.json` identifies the Site and selects that public directory.
+Package `out/`, never `.next/`, for Sites. No Worker, runtime bindings,
+database, or new dependencies are required. `next start` does not serve an
+export: run `bun run build` again before using `bun run start`.
+
+## Sites publishing
+
+Run `bun run check`, `bun run test`, and `bun run build:sites`. Use the Sites
+packaging helper, push the exact validated source to its managed repository,
+save that version, and deploy with owner-only access. Source write credentials
+must remain ephemeral and must not appear in files, Git remotes, or logs.
+Do not change access to public without approval. A public repository and
+Devpost submission remain separate from Sites hosting.
 
 ## Local production verification
 
@@ -52,7 +63,7 @@ Before publishing, use [Testing](TESTING.md) for the full acceptance pass:
 - Check the session-only behavior and import limits are accurately described;
   there is no real payment, persistent design storage, or hosted AI agent.
 
-## When a hosting platform is chosen
+## Before sharing the deployed site publicly
 
 - Serve the app at an HTTPS origin. Browser WebMCP availability also depends
   on the client and its experimental settings; HTTPS alone does not enable it.

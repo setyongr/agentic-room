@@ -15,6 +15,7 @@ bun install --frozen-lockfile # install the committed dependency versions
 bun run check      # TypeScript strict typecheck  (tsc --noEmit)
 bun run test       # Vitest domain suites         (jsdom environment)
 bun run build      # production build             (Next.js)
+bun run build:sites # Sites static export          (out/)
 bun run start      # serve the production build   (http://localhost:3000)
 bun run dev        # development server with HMR
 ```

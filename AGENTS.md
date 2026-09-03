@@ -10,9 +10,11 @@ before touching anything structural.
   canvas.** Runtime identity lives in `src/data/appIdentity.ts`; keep the UI,
   metadata, package metadata, and README consistent. WebMCP names the protocol,
   not the app. Preserve original copyright and third-party attribution.
-- Hosting is deliberately undecided. Follow `docs/DEPLOYMENT.md` for local
-  production checks. Do not choose a provider, add hosting configuration,
-  deploy, push, or change repository visibility without the user's request.
+- Sites is configured for static export with `bun run build:sites`; the
+  standard Next.js build/start flow remains available. Follow
+  `docs/DEPLOYMENT.md`. Keep Sites access private unless the user explicitly
+  approves public sharing. Do not push to a public repository or change its
+  visibility without the user's request.
 - Before handing off a release, run `bun run check`, `bun run test`, and
   `bun run build`; distinguish automated results from manual checks not run.
 - Do not commit credentials, `.env` files, generated builds, local tool state,
@@ -61,6 +63,7 @@ bun run dev        # dev server → http://localhost:3000
 bun run check      # typecheck (tsc --noEmit)      — run before finishing
 bun run test       # Vitest domain suites (66 tests, 8 files)
 bun run build      # production build
+bun run build:sites # static export to out/ for Sites
 bun run start      # serve production build
 ```
 

@@ -188,6 +188,7 @@ Other commands:
 bun run check      # typecheck (tsc --noEmit)
 bun run test       # run the test suite (vitest) — 66 tests, 8 files
 bun run build      # production build
+bun run build:sites # static export to out/ for Sites
 bun run start      # serve the production build
 ```
 
