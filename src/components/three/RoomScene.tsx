@@ -6,6 +6,7 @@ import { ContactShadows } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { useRoomStore } from '@/store/roomStore';
 import { FurnitureMesh } from '@/components/three/FurnitureMesh';
+import { UserModelMesh } from '@/components/three/UserModelMesh';
 import { RoomArchitecture } from '@/components/three/RoomArchitecture';
 
 /**
@@ -29,11 +30,14 @@ export function RoomScene() {
   const room = useRoomStore((state) => state.room);
   const roomAppearance = useRoomStore((state) => state.roomAppearance);
   const furniture = useRoomStore((state) => state.furniture);
+  const userModels = useRoomStore((state) => state.userModels);
   const issues = useRoomStore((state) => state.validation.issues);
   const selectedInstanceId = useRoomStore((state) => state.selectedInstanceId);
+  const selectedUserModelId = useRoomStore((state) => state.selectedUserModelId);
   const lastMutation = useRoomStore((state) => state.lastMutation);
   const getProductById = useRoomStore((state) => state.getProductById);
   const selectItem = useRoomStore((state) => state.selectItem);
+  const selectUserModel = useRoomStore((state) => state.selectUserModel);
 
   const invalidIds = useMemo(() => {
     const ids = new Set<string>();
@@ -46,7 +50,11 @@ export function RoomScene() {
   }, [issues]);
 
   const handleSelect = useCallback((instanceId: string) => selectItem(instanceId), [selectItem]);
-  const handleDeselect = useCallback(() => selectItem(null), [selectItem]);
+  const handleSelectUserModel = useCallback((userModelId: string) => selectUserModel(userModelId), [selectUserModel]);
+  const handleDeselect = useCallback(() => {
+    selectItem(null);
+    selectUserModel(null);
+  }, [selectItem, selectUserModel]);
   const backgroundRef = useRef<THREE.Mesh>(null);
 
   const handleBackgroundPointerDown = useCallback(
@@ -100,6 +108,15 @@ export function RoomScene() {
           />
         );
       })}
+
+      {userModels.map((model) => (
+        <UserModelMesh
+          key={model.id}
+          model={model}
+          selected={model.id === selectedUserModelId}
+          onSelect={handleSelectUserModel}
+        />
+      ))}
 
       {/* Click-to-deselect surface over the floor and walls (see module docs). */}
       <mesh

@@ -134,6 +134,10 @@ export interface FurnitureProduct {
   defaultRotation?: number;
   /** CSS background gradient used for the catalog thumbnail. */
   thumbnailGradient?: string;
+  /** Optional repo-served GLB model that replaces the procedural builder. */
+  modelUri?: string;
+  /** Static yaw offset in degrees applied to the GLB before the item rotation. */
+  modelYaw?: number;
 }
 
 /** Demo budget for the first Budget Rescue scenario, USD. */
@@ -225,6 +229,22 @@ export const PRODUCTS: readonly FurnitureProduct[] = [
     material: 'linen',
     stock: 16,
     thumbnailGradient: 'linear-gradient(135deg, #E6DFD2, #8FA3A0)',
+  },
+  {
+    id: 'noir-studio-sofa',
+    name: 'Noir Studio Sofa',
+    category: 'sofa',
+    price: 1490,
+    width: 2.0,
+    depth: 0.98,
+    height: 0.9,
+    styleTags: ['modern', 'contemporary', 'minimalist'],
+    colors: ['charcoal'],
+    material: 'linen',
+    stock: 8,
+    thumbnailGradient: 'linear-gradient(135deg, #26262A, #6B6F76)',
+    modelUri: '/models/sofa-ak-studio.glb',
+    modelYaw: 180,
   },
 
   // ── Armchairs ────────────────────────────────────────────────────────

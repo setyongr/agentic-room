@@ -142,7 +142,7 @@ expected numbers. Acceptance:
 
 ### 4.2 Mobile / tablet (< 1024 px)
 
-- Bottom bar shows Furnish / Edit (with validity dot) / Activity.
+- Bottom bar shows Furnish / Edit (with validity dot) / Activity / Model credits; the credits popover lists the bundled sofa's CC-BY attribution.
 - Furnish/Edit opens the rail as a bottom sheet with a scrim; the closed
   sheet is not reachable by keyboard (inert); Escape, scrim, and the close
   button dismiss it and restore focus to the opener.
@@ -165,7 +165,10 @@ expected numbers. Acceptance:
 ## 5. Performance and hygiene sanity
 
 - Fresh load: no network asset requests beyond the Next.js bundle (no remote
-  fonts, textures, or images); scene renders from procedural data.
+  fonts, textures, or images); the default room renders from procedural data.
+  The single bundled sofa GLB (`public/models/sofa-ak-studio.glb`) is fetched
+  only when the Noir Studio Sofa product is placed; user-uploaded models load
+  separately from their own session object URLs.
 - 3D: with a full room (~10+ pieces) orbit/top interactions stay smooth;
   DPR is capped at 2 and frame-loop code performs no allocations
   (see `docs/ARCHITECTURE.md` §8).

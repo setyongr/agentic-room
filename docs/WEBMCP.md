@@ -11,7 +11,7 @@ adds lifecycle, envelope, error, and boundary detail.
 ## 1. Overview
 
 The page is its own MCP server — no binary, daemon, or backend. It registers
-**20 tools** (9 reads, 11 mutations) against Chrome's in-browser Model
+**21 tools** (10 reads, 11 mutations) against Chrome's in-browser Model
 Context API. The human UI and the tools drive the same Zustand store; a tool
 call is indistinguishable from a click except for `origin: 'agent'`, which is
 what makes the completed action visible in the activity feed.
@@ -23,7 +23,7 @@ Implementation files:
 | `src/webmcp/types.ts` | Minimal local typings for the API (no SDK dependency): tool/schema/annotation shapes. |
 | `src/webmcp/registerTools.ts` | `registerRoomTools()` — detection, registration, unregistration, dev-only warnings. |
 | `src/webmcp/serialize.ts` | Result envelope helpers, input readers (string/number/object/array), per-tool parsing. |
-| `src/webmcp/tools/readTools.ts` | The 9 read tools. |
+| `src/webmcp/tools/readTools.ts` | The 10 read tools. |
 | `src/webmcp/tools/mutationTools.ts` | The 11 mutation tools. |
 
 ## 2. Availability and registration lifecycle
@@ -81,7 +81,7 @@ Every tool result is a JSON object with a `success` discriminant:
 { "success": false, "error": "Human readable message", "code": "machine_code", "...details": "..." }
 ```
 
-## 4. Read tools (9) — never mutate state
+## 4. Read tools (10) — never mutate state
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
@@ -94,6 +94,7 @@ Every tool result is a JSON object with a `success` discriminant:
 | `get_budget_pressure` | `under_budget | at_budget | over_budget`, `amountOver`, replaceable marketplace items sorted most-expensive-first | — |
 | `find_cheaper_alternatives` | Cheaper, in-stock, same-category candidates for one placed marketplace item, ranked by compatibility then savings, with scores | `instanceId`, `targetPrice?`, `maxResults?` |
 | `get_saved_designs` | Session designs, newest first: name, id, item count, budget, marketplace total and room appearance at save time | — |
+| `render_scene_snapshot` | Render the current 3D room to a JPEG image (data URL) for visual/vision checks: `view` = `live` (editor camera as last left) or `orbit`/`top`/`front`/`side` overviews framed without moving the user's camera; output downscaled to `maxWidth`. Captures only the 3D canvas — never UI overlays or text. Returns `format`, `width`, `height`, `dataUrl` | `view?`, `maxWidth?` |
 
 Read annotations: `readOnlyHint`, no feed-logging of arguments. Read-only
 calls still append *completion* entries ("Inspected the room: …",
@@ -113,7 +114,7 @@ templates never contain query text or other free-form content.
 | `set_budget` | Budget ≥ 0; refreshes the budget validation + pricing immediately | `budget` |
 | `set_room_appearance` | Style the room (visual only; pricing/layout untouched). Either `preset: "default"` or all three explicit finish ids; mixed/partial inputs fail with `invalid_args`. Returns the resolved appearance + layout | `preset` **or** `wallFinishId` + `floorFinishId` + `wallpaperId` |
 | `replace_product` | Swap the product behind an item: same category, in stock, unlocked. Preserves `instanceId`/position/rotation/source; keeps the current color when the replacement offers it, else resets to the replacement's first color, always with the replacement's material. Returns `savings` (negative when pricier) + refreshed layout/pricing | `instanceId`, `replacementProductId` |
-| `save_design` | Capture the live design (room, items with variants, room appearance) as a named snapshot; returns the design summary incl. appearance | `name`, `thumbnailGradient?` |
+| `save_design` | Capture the live design (room, items with variants, room appearance) as a named snapshot; returns the design summary incl. appearance. Fails with `user_models_not_savable` while session-uploaded models are placed (uploads are never stored) | `name`, `thumbnailGradient?` |
 | `load_design` | Restore a session design incl. room appearance and item variants (destructive: current design is discarded; unknown id → `design_not_found`); restored block includes appearance | `designId` |
 | `add_to_cart` | Add placed marketplace instances at catalog prices; all-or-nothing — any unknown/existing/already-carted instance rejects the whole request | `instanceIds` (array) |
 
@@ -143,6 +144,9 @@ unchanged. Codes exercised by the test suite and demo workflows:
 | `cart_add_rejected` | Some requested instances could not be added (details list the rejections). |
 | `invalid_variant` | Place/replace requested a color not offered by the product or a mismatched material (details: `requestedVariant`, `availableColors`, `availableMaterials`). |
 | `invalid_room_appearance` | Appearance update referenced an unknown finish/wallpaper id (details: `field`, `value`, `allowedValues`). |
+| `user_models_not_savable` | `save_design` while session-uploaded models are placed (uploads are never stored; details: `userModelIds`). |
+| `user_model_not_found` | User-model action referenced an id that is no longer placed. |
+| `invalid_rotation` | Uploaded-model rotation is not a finite number of degrees. |
 
 Zone placement can also fail with placement-specific codes defined in
 `src/domain/placement.ts` (category disallowed, zone capacity/footprint

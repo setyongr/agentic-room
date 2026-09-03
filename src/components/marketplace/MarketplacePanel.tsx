@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,12 +11,14 @@ import {
   SlidersHorizontal,
   Sofa,
   SwatchBook,
+  Upload,
 } from 'lucide-react';
 import { furnitureHex } from '@/data/appearance';
 import { categories, colors, styles } from '@/data/products';
 import type { FurnitureProduct, SearchFilters } from '@/domain/types';
 import { useRoomStore } from '@/store/roomStore';
 import { RoomAppearancePanel } from '@/components/marketplace/RoomAppearancePanel';
+import { prepareUserGlb, revokePreparedGlb } from '@/components/marketplace/glbUpload';
 
 const PAGE_SIZE = 12;
 const CURRENCY = new Intl.NumberFormat('en-US', {
@@ -53,6 +55,7 @@ export function MarketplacePanel() {
   const getCompatiblePlacementZones = useRoomStore((state) => state.getCompatiblePlacementZones);
   const fitProductInZone = useRoomStore((state) => state.fitProductInZone);
   const placeProduct = useRoomStore((state) => state.placeProduct);
+  const uploadUserModel = useRoomStore((state) => state.uploadUserModel);
   const selectItem = useRoomStore((state) => state.selectItem);
 
   const [furnishTab, setFurnishTab] = useState<FurnishTab>('furniture');
@@ -65,6 +68,9 @@ export function MarketplacePanel() {
   const [page, setPage] = useState(1);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [placingProductId, setPlacingProductId] = useState<string | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<Feedback>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   /** Uncommitted catalog choice per product; defaults to the first authored color. */
   const [selectedColorByProduct, setSelectedColorByProduct] = useState<Record<string, string>>({});
   /** At most one product card detail region is expanded at a time. */
@@ -119,6 +125,35 @@ export function MarketplacePanel() {
     setMaxPrice('');
     setPage(1);
     setFeedback(null);
+  }
+
+  async function handleUploadModel(file: File | undefined) {
+    setUploadMessage(null);
+    if (file === undefined) return;
+    setUploadBusy(true);
+    const prepared = await prepareUserGlb(file);
+    if (!prepared.ok) {
+      setUploadMessage({ kind: 'error', message: prepared.message });
+      setUploadBusy(false);
+      return;
+    }
+    const added = uploadUserModel({
+      name: prepared.name,
+      url: prepared.url,
+      width: prepared.width,
+      depth: prepared.depth,
+      height: prepared.height,
+    });
+    if (!added.ok) {
+      revokePreparedGlb(prepared.url);
+      setUploadMessage({ kind: 'error', message: added.message });
+    } else {
+      setUploadMessage({
+        kind: 'success',
+        message: `“${prepared.name}” is placed in the room${added.ok ? '' : ''}. Open Edit to move or rotate it.`,
+      });
+    }
+    setUploadBusy(false);
   }
 
   function handlePlace(product: FurnitureProduct) {
@@ -273,6 +308,49 @@ export function MarketplacePanel() {
                 ) : null}
               </div>
             </details>
+
+            <div className="mt-3 flex items-center gap-3 rounded-control border border-dashed border-border bg-surface-muted/50 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-text">Upload your own 3D model</p>
+                <p className="mt-0.5 text-xs text-text-muted">.glb up to 15 MB · auto-fitted · session only</p>
+              </div>
+              <button
+                type="button"
+                disabled={uploadBusy}
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-control bg-accent px-3 text-xs font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none"
+              >
+                <Upload aria-hidden="true" className="size-4" />
+                {uploadBusy ? 'Reading…' : 'Upload'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".glb,model/gltf-binary"
+                className="sr-only"
+                aria-label="Choose a GLB model file to upload"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  void handleUploadModel(file);
+                }}
+              />
+            </div>
+            {uploadMessage ? (
+              <p
+                className={`mt-2 flex items-start gap-1.5 rounded-control px-3 py-2 text-xs ${
+                  uploadMessage.kind === 'error' ? 'bg-error-soft text-error' : 'bg-success-soft text-success'
+                }`}
+                role="status"
+              >
+                {uploadMessage.kind === 'error' ? (
+                  <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                ) : (
+                  <CheckCircle2 aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                )}
+                {uploadMessage.message}
+              </p>
+            ) : null}
           </>
         ) : null}
       </header>

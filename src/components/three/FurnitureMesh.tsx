@@ -20,8 +20,9 @@
  *   the frame loop allocates, and pointer input stays live mid-animation.
  */
 
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { Component, Suspense, useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { furnitureHex } from '@/data/appearance';
 import type { FurnitureProduct, FurnitureVariant, PlacedFurniture } from '@/domain/types';
@@ -497,6 +498,139 @@ function buildModel(
 }
 
 /* ------------------------------------------------------------------ */
+/* Model-backed rendering (optional GLB assets)                        */
+/* ------------------------------------------------------------------ */
+
+/** Renders the procedural part list (also the GLB loading fallback). */
+function PartMeshes({
+  parts,
+  materials,
+}: {
+  parts: readonly Part[];
+  materials: readonly THREE.MeshStandardMaterial[];
+}) {
+  return (
+    <>
+      {parts.map((part, index) => (
+        <mesh
+          key={index}
+          material={materials[part.mat]}
+          position={part.position}
+          rotation={part.rotation}
+          castShadow={part.cast}
+          receiveShadow={part.receive}
+        >
+          {part.kind === 'box' && <boxGeometry args={part.args} />}
+          {part.kind === 'cylinder' && <cylinderGeometry args={part.args} />}
+          {part.kind === 'sphere' && <sphereGeometry args={part.args} />}
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Bounds of one GLB, cached per uri. Bounds are product-independent; the
+ * per-product fit (scale/center/lift/yaw) is derived on every render so two
+ * products sharing a model can never poison each other's fit.
+ */
+const modelBoundsCache = new Map<string, { min: [number, number, number]; max: [number, number, number] }>();
+
+/**
+ * Catches GLB decode/load failures (404, malformed file, rejected promise)
+ * that Suspense cannot absorb and keeps the procedural model on screen.
+ * Re-keyed by the model uri in FurnitureMesh so a later retry starts clean.
+ */
+class ModelLoadBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/**
+ * Fits one GLB product model onto the floor at the item origin. The model is
+ * centered on its x/z extent, uniformly scaled so its width equals the
+ * product width, and lifted so its lowest point sits at y = 0 — matching the
+ * procedural builders' contract, so rings, yaw, and validation stay intact.
+ * Models without measurable bounds, or products whose asset fails to load,
+ * keep the procedural representation instead of an invalid transform.
+ */
+function ModelBackedMesh({
+  product,
+  parts,
+  materials,
+}: {
+  product: FurnitureProduct;
+  parts: readonly Part[];
+  materials: readonly THREE.MeshStandardMaterial[];
+}) {
+  const uri = product.modelUri as string;
+  const { scene } = useGLTF(uri);
+
+  const model = useMemo(() => {
+    const copy = scene.clone(true);
+    copy.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+    return copy;
+  }, [scene]);
+
+  const bounds = useMemo(() => {
+    const cached = modelBoundsCache.get(uri);
+    if (cached !== undefined) return cached;
+    const box = new THREE.Box3().setFromObject(model);
+    if (box.isEmpty()) return null;
+    const min = box.min.toArray() as [number, number, number];
+    const max = box.max.toArray() as [number, number, number];
+    if (!min.every(Number.isFinite) || !max.every(Number.isFinite)) return null;
+    const next = { min, max };
+    modelBoundsCache.set(uri, next);
+    return next;
+  }, [model, uri]);
+
+  const fit = useMemo(() => {
+    if (bounds === null) return null;
+    const sizeX = bounds.max[0] - bounds.min[0];
+    const sizeZ = bounds.max[2] - bounds.min[2];
+    const sizeY = bounds.max[1] - bounds.min[1];
+    if (sizeX <= 1e-4 || sizeZ <= 1e-4 || sizeY <= 1e-4) return null;
+    const scale = product.width / sizeX;
+    const centerX = (bounds.min[0] + bounds.max[0]) / 2;
+    const centerZ = (bounds.min[2] + bounds.max[2]) / 2;
+    const yawRad = ((product.modelYaw ?? 0) * Math.PI) / 180;
+    return {
+      scale,
+      offset: [-centerX, 0, -centerZ] as [number, number, number],
+      lift: -bounds.min[1] * scale,
+      yawRad,
+    };
+  }, [bounds, product.width, product.modelYaw]);
+
+  if (bounds === null || fit === null) {
+    return <PartMeshes parts={parts} materials={materials} />;
+  }
+
+  return (
+    <group position={[0, fit.lift, 0]}>
+      <group rotation={[0, fit.yawRad, 0]}>
+        <group scale={fit.scale}>
+          <group position={fit.offset}>
+            <primitive object={model} />
+          </group>
+        </group>
+      </group>
+    </group>
+  );
+}
+/* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -622,22 +756,21 @@ export function FurnitureMesh({ item, product, selected, invalid, mutationKey, o
   const ringRadius = Math.hypot(product.width, product.depth) / 2 + 0.07;
   const ringY = product.category === 'rug' ? product.height + 0.006 : 0.015;
 
+  const modelUri = product.modelUri;
+  const geometry =
+    modelUri !== undefined ? (
+      <Suspense fallback={<PartMeshes parts={parts} materials={materials} />}>
+        <ModelLoadBoundary key={modelUri} fallback={<PartMeshes parts={parts} materials={materials} />}>
+          <ModelBackedMesh product={product} parts={parts} materials={materials} />
+        </ModelLoadBoundary>
+      </Suspense>
+    ) : (
+      <PartMeshes parts={parts} materials={materials} />
+    );
+
   return (
     <group ref={groupRef} onPointerDown={handlePointerDown}>
-      {parts.map((part, index) => (
-        <mesh
-          key={index}
-          material={materials[part.mat]}
-          position={part.position}
-          rotation={part.rotation}
-          castShadow={part.cast}
-          receiveShadow={part.receive}
-        >
-          {part.kind === 'box' && <boxGeometry args={part.args} />}
-          {part.kind === 'cylinder' && <cylinderGeometry args={part.args} />}
-          {part.kind === 'sphere' && <sphereGeometry args={part.args} />}
-        </mesh>
-      ))}
+      {geometry}
 
       {selected && (
         <mesh rotation-x={-Math.PI / 2} position={[0, ringY, 0]}>

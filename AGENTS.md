@@ -9,10 +9,10 @@ before touching anything structural.
 A Next.js 16 + React 19 + TypeScript (strict) single-page living-room planner
 with no backend: a deterministic furniture catalog and room store in the
 browser, a React Three Fiber 3D editor, and a WebMCP surface — the page
-registers 20 tools against Chrome's Model Context API
+registers 21 tools against Chrome's Model Context API
 (`document.modelContext`/`navigator.modelContext`) so a browser agent can
 drive the exact same store actions as the human UI. All product/room data is
-hand-authored constants; nothing is fetched at runtime.
+hand-authored constants; no remote assets are fetched at runtime (one bundled sofa GLB loads on demand when placed).
 
 ## Commands (Bun)
 
@@ -36,11 +36,11 @@ come from `getTools()`).
 src/
   domain/    pure logic + types + colocated *.test.ts   ← ground truth rules
              (incl. appearance.ts — visual-only room styling updates)
-  data/      products.ts (78), appearance.ts (room styling registry),
+  data/      products.ts (79, incl. one model-backed sofa), appearance.ts (room styling registry),
              placementZones.ts (10), demoRoom.ts (presets)
   store/     roomStore.ts (single Zustand source of truth), selectors.ts
   webmcp/    registerTools.ts, serialize.ts, tools/{read,mutation}Tools.ts
-             (9 reads / 11 mutations)
+             (10 reads / 11 mutations)
   components/ planner/ (shell + panels + drawers), marketplace/, three/ (R3F)
   app/       page.tsx, layout.tsx, globals.css (Tailwind v4 tokens)
 docs/
@@ -71,7 +71,9 @@ README.md           product overview, quick start, demo workflows
 6. **Budget semantics.** Only `source: 'marketplace'` items count toward
    `newTotal`; replacements keep instance id/position/rotation/source.
 7. **No new runtime dependencies or network assets** without an explicit
-   ask. The 3D scene is procedural; thumbnails are CSS gradients.
+   ask. The 3D scene is procedural by default; products may opt into a
+   bundled, repo-served GLB (`modelUri`, credited in `THIRD_PARTY_NOTICES.md`)
+   that loads on demand with a procedural fallback. Thumbnails are CSS gradients.
 
 ## Conventions
 

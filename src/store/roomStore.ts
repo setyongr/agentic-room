@@ -116,6 +116,37 @@ export interface SaveDesignOptions {
   thumbnailGradient?: string;
 }
 
+/**
+ * A user-uploaded GLB model placed in the room.
+ *
+ * Uploads are a session-local visual layer: they never enter the catalog,
+ * budgets, validation, activity feed, or saved designs, and WebMCP tools do
+ * not see them. Dimensions are meters after auto-fitting.
+ */
+export interface UserModelItem {
+  /** unique session id, e.g. "user-model-3" */
+  id: string;
+  /** display name, derived from the uploaded file name */
+  name: string;
+  /** object URL of the uploaded GLB (revoked when the item is removed) */
+  url: string;
+  /** auto-fitted extents in meters, floor at y = 0 */
+  width: number;
+  depth: number;
+  height: number;
+  /** footprint center in room coordinates (x/z) */
+  position: { x: number; z: number };
+  /** yaw rotation in degrees around the y axis */
+  rotation: number;
+  locked: boolean;
+}
+
+/** Options for {@link RoomStore.uploadUserModel}. */
+export interface UploadUserModelOptions {
+  /** where the upload icon sits in room coordinates (defaults to the first zone center) */
+  position?: { x: number; z: number };
+}
+
 /** The room store contract: live state plus human/WebMCP-shared actions. */
 export interface RoomStore {
   /* ── State ─────────────────────────────────────────────────────────── */
@@ -126,10 +157,14 @@ export interface RoomStore {
   roomAppearance: RoomAppearance;
   /** Placed furniture instances, never mutated in place. */
   furniture: readonly PlacedFurniture[];
+  /** User-uploaded GLB models (session-local visual layer, see {@link UserModelItem}). */
+  userModels: readonly UserModelItem[];
   /** Current design budget in USD; only marketplace items count against it. */
   budget: number;
   /** Selected placed instance, or null when nothing is selected. */
   selectedInstanceId: string | null;
+  /** Selected uploaded model, or null when none is selected. */
+  selectedUserModelId: string | null;
   /** View mode of the 3D room editor. */
   cameraMode: CameraMode;
   /** Designs saved during this session (deterministic ids/timestamps). */
@@ -158,6 +193,8 @@ export interface RoomStore {
 
   /** Select a placed instance (null clears the selection). View state; no feed entry. */
   selectItem: (instanceId: string | null) => void;
+  /** Select an uploaded model (null clears the selection); mutually exclusive with {@link selectItem}. */
+  selectUserModel: (userModelId: string | null) => void;
   /** Set the 3D camera mode. View state; no feed entry. */
   setCameraMode: (mode: CameraMode) => void;
 
@@ -232,6 +269,19 @@ export interface RoomStore {
     locked: boolean,
     origin?: ActionOrigin,
   ) => SerializableResult<placement.PlacementMutationResult>;
+  /** Upload a user GLB model into the room (session-local; see {@link UserModelItem}). */
+  uploadUserModel: (
+    model: Omit<UserModelItem, 'id' | 'position' | 'rotation' | 'locked'>,
+    options?: UploadUserModelOptions,
+  ) => SerializableResult<UserModelItem>;
+  /** Move an uploaded model to new x/z coordinates (locked models may move). */
+  moveUserModel: (userModelId: string, x: number, z: number) => SerializableResult<UserModelItem>;
+  /** Set an uploaded model's yaw rotation (locked models may rotate). */
+  rotateUserModel: (userModelId: string, rotation: number) => SerializableResult<UserModelItem>;
+  /** Remove an uploaded model; locked models cannot be removed. */
+  removeUserModel: (userModelId: string) => SerializableResult<UserModelItem>;
+  /** Lock or unlock an uploaded model; setting the current value is a no-op success. */
+  setUserModelLocked: (userModelId: string, locked: boolean) => SerializableResult<UserModelItem>;
   /** Replace the product backing an item (same category, in stock; locked items cannot be replaced). */
   replaceProduct: (
     instanceId: string,
@@ -291,11 +341,12 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
     pricing: pricing.calculateTotal(furniture, nextBudget),
   });
 
-  /** Stage the state updates for restoring a snapshot into the live design. */
   const restoreDesign = (restored: designs.RestoredDesign): Partial<RoomStore> => ({
     ...refreshDesign(restored.room, restored.items, restored.budget),
     roomAppearance: restored.appearance,
     selectedInstanceId: null,
+    userModels: [],
+    selectedUserModelId: null,
   });
 
   /**
@@ -331,8 +382,10 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
     room,
     roomAppearance: initialAppearance,
     furniture: items,
+    userModels: [],
     budget,
     selectedInstanceId: null,
+    selectedUserModelId: null,
     cameraMode: 'orbit',
     savedDesigns: [],
     cart: { id: 'cart-1', status: 'active', items: [], total: 0, updatedAt: SESSION_EPOCH },
@@ -344,7 +397,18 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
 
     /* ── View ── */
     selectItem: (instanceId) => {
-      set({ selectedInstanceId: instanceId, lastMutation: get().lastMutation + 1 });
+      set({
+        selectedInstanceId: instanceId,
+        selectedUserModelId: null,
+        lastMutation: get().lastMutation + 1,
+      });
+    },
+    selectUserModel: (userModelId) => {
+      set({
+        selectedUserModelId: userModelId,
+        selectedInstanceId: null,
+        lastMutation: get().lastMutation + 1,
+      });
     },
     setCameraMode: (mode) => {
       set({ cameraMode: mode, lastMutation: get().lastMutation + 1 });
@@ -557,6 +621,121 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
       return result;
     },
 
+    /* ── Uploaded user models (session-local visual layer) ─────────── */
+
+    uploadUserModel: (model, options = {}) => {
+      const prev = get();
+      if (model.name.trim() === '' || model.url === '') {
+        return { ok: false, code: 'invalid_upload', message: 'The uploaded model has no usable name or data.' };
+      }
+      const { width, depth, height } = model;
+      if (!Number.isFinite(width) || !Number.isFinite(depth) || !Number.isFinite(height) || width <= 0 || depth <= 0 || height <= 0) {
+        return {
+          ok: false,
+          code: 'invalid_upload',
+          message: 'The uploaded model could not be measured (empty or unsupported geometry).',
+        };
+      }
+      const sequence = prev.sessionSequence + 1;
+      const mint = sessionMint(sequence, 'user-model');
+      const footprint = prev.room.placementZones[0]?.footprint;
+      // Default: first zone center, nudged toward the room middle so a fresh
+      // upload never sits exactly on top of a zone-centered catalog item.
+      const defaultPosition = (() => {
+        if (!footprint) return { x: 0, z: 0 };
+        // Nudge toward the room middle, capped by the zone's remaining half-width
+        // so a fresh upload never protrudes from (or crosses) its chosen zone.
+        const slack = footprint.width / 2 - width / 2 - 0.25;
+        const gap = slack > 0 ? Math.min(1.2, slack) : 0;
+        const dir = footprint.x < -0.01 ? 1 : footprint.x > 0.01 ? -1 : 1;
+        return { x: footprint.x + dir * gap, z: footprint.z };
+      })();
+      const item: UserModelItem = {
+        id: mint.id,
+        name: model.name,
+        url: model.url,
+        width,
+        depth,
+        height,
+        position: options.position ?? defaultPosition,
+        rotation: 0,
+        locked: false,
+      };
+      set({
+        userModels: [...prev.userModels, item],
+        sessionSequence: sequence,
+        selectedUserModelId: item.id,
+        selectedInstanceId: null,
+        lastMutation: prev.lastMutation + 1,
+      });
+      return { ok: true, data: item };
+    },
+
+    moveUserModel: (userModelId, x, z) => {
+      const prev = get();
+      const current = prev.userModels.find((m) => m.id === userModelId);
+      if (current === undefined) {
+        return { ok: false, code: 'user_model_not_found', message: `No uploaded model with id “${userModelId}”`, details: { userModelId } };
+      }
+      const item = { ...current, position: { x, z } };
+      set({
+        userModels: prev.userModels.map((m) => (m.id === userModelId ? item : m)),
+        lastMutation: prev.lastMutation + 1,
+      });
+      return { ok: true, data: item };
+    },
+
+    rotateUserModel: (userModelId, rotation) => {
+      const prev = get();
+      const current = prev.userModels.find((m) => m.id === userModelId);
+      if (current === undefined) {
+        return { ok: false, code: 'user_model_not_found', message: `No uploaded model with id “${userModelId}”`, details: { userModelId } };
+      }
+      if (!Number.isFinite(rotation)) {
+        return { ok: false, code: 'invalid_rotation', message: 'Rotation must be a finite number of degrees.' };
+      }
+      // Parity with placement.rotateProduct: canonical yaw in [0, 360).
+      const normalized = ((rotation % 360) + 360) % 360;
+      const item = { ...current, rotation: normalized };
+      set({
+        userModels: prev.userModels.map((m) => (m.id === userModelId ? item : m)),
+        lastMutation: prev.lastMutation + 1,
+      });
+      return { ok: true, data: item };
+    },
+
+    setUserModelLocked: (userModelId, locked) => {
+      const prev = get();
+      const current = prev.userModels.find((m) => m.id === userModelId);
+      if (current === undefined) {
+        return { ok: false, code: 'user_model_not_found', message: `No uploaded model with id “${userModelId}”`, details: { userModelId } };
+      }
+      if (current.locked === locked) return { ok: true, data: current };
+      const item = { ...current, locked };
+      set({
+        userModels: prev.userModels.map((m) => (m.id === userModelId ? item : m)),
+        lastMutation: prev.lastMutation + 1,
+      });
+      return { ok: true, data: item };
+    },
+
+    removeUserModel: (userModelId) => {
+      const prev = get();
+      const current = prev.userModels.find((m) => m.id === userModelId);
+      if (current === undefined) {
+        return { ok: false, code: 'user_model_not_found', message: `No uploaded model with id “${userModelId}”`, details: { userModelId } };
+      }
+      if (current.locked) {
+        return { ok: false, code: 'item_locked', message: 'Locked uploads cannot be removed. Unlock it first.' };
+      }
+      set({
+        userModels: prev.userModels.filter((m) => m.id !== userModelId),
+        selectedUserModelId: prev.selectedUserModelId === userModelId ? null : prev.selectedUserModelId,
+        lastMutation: prev.lastMutation + 1,
+      });
+      return { ok: true, data: current };
+    },
+
     replaceProduct: (instanceId, newProductId, origin = 'human') => {
       const prev = get();
       const previous = prev.furniture.find((f) => f.instanceId === instanceId);
@@ -616,6 +795,14 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
 
     saveDesign: (name, options = {}, origin = 'human') => {
       const prev = get();
+      if (prev.userModels.length > 0) {
+        return {
+          ok: false,
+          code: 'user_models_not_savable',
+          message: 'Remove uploaded models before saving a design; uploads are session-only and cannot be stored.',
+          details: { userModelIds: prev.userModels.map((m) => m.id) },
+        };
+      }
       const sequence = prev.sessionSequence + 1;
       const snapshot = designs.createDesignSnapshot(prev.room, prev.furniture, prev.budget, prev.roomAppearance, {
         id: `snapshot-${sequence}`,

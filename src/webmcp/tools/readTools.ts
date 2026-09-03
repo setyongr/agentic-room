@@ -11,6 +11,7 @@
  * (`untrustedContentHint: false`).
  */
 
+import { captureSceneSnapshot } from '@/webmcp/sceneSnapshot';
 import { MAX_PAGE_SIZE } from '@/domain/catalog';
 import * as pricing from '@/domain/pricing';
 import type {
@@ -672,6 +673,51 @@ function getSavedDesignsTool(): ModelContextTool {
   );
 }
 
+/** Render the live 3D room to a JPEG image so vision-capable agents can judge aesthetics. */
+function renderSceneSnapshotTool(): ModelContextTool {
+  const VIEWS = ['live', 'orbit', 'top', 'front', 'side'] as const;
+  return readTool(
+    'render_scene_snapshot',
+    'Render the current 3D room to a JPEG image (data URL) so the arrangement can be judged visually. view presets: “live” uses the editor camera exactly as last left; “orbit”/“top”/“front”/“side” frame the standard room overviews without moving the user’s camera. Returns the image as a data: URL with pixel dimensions; output is downscaled to maxWidth. Only the 3D canvas is captured — UI panels, overlays, and text are never included. Deterministic; never mutates state.',
+    async (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const view = readOptionalEnum(args.value, 'view', VIEWS);
+      const maxWidth = readOptionalNumber(args.value, 'maxWidth', { min: 256, max: 2048, integer: true });
+      if (!view.ok) return toolFail(view.code, view.message);
+      if (!maxWidth.ok) return toolFail(maxWidth.code, maxWidth.message);
+      const result = await captureSceneSnapshot({
+        view: view.value ?? 'live',
+        maxWidth: maxWidth.value ?? 1024,
+        quality: 0.85,
+      });
+      if (!result.ok) return toolFail(result.code, result.message);
+      return toolOk({
+        format: 'image/jpeg',
+        view: result.view,
+        width: result.width,
+        height: result.height,
+        dataUrl: result.dataUrl,
+        note: 'Pass the dataUrl to a vision-capable model to judge the visual result.',
+      });
+    },
+    {
+      type: 'object',
+      properties: {
+        view: {
+          type: 'string',
+          enum: [...VIEWS],
+          description: 'Which camera view to render (“live” = current editor camera).',
+        },
+        maxWidth: {
+          type: 'integer',
+          description: 'Output width cap in pixels (256-2048, default 1024); height keeps the canvas aspect.',
+        },
+      },
+      additionalProperties: false,
+    },
+  );
+}
 /**
  * The complete read-only WebMCP tool surface for the room editor.
  *
@@ -690,5 +736,6 @@ export function createReadTools(): readonly ModelContextTool[] {
     getBudgetPressureTool(),
     findCheaperAlternativesTool(),
     getSavedDesignsTool(),
+    renderSceneSnapshotTool(),
   ];
 }

@@ -47,7 +47,7 @@ src/
     marketplace/        MarketplacePanel — catalog + room-finish sidebar content
     three/              React Three Fiber scene (see §8)
   data/
-    products.ts         78 hand-authored products, category/style/color lists
+    products.ts         79 hand-authored products (one GLB-backed), lists; optional modelUri/modelYaw fields
     appearance.ts       Room styling registry: wall/floor/wallpaper options,
                         furniture color-to-hex map, appearance previews
     placementZones.ts   10 named zones with footprints, categories, hints
@@ -72,7 +72,9 @@ src/
     types.ts            Local Model Context API typings (no SDK dependency)
     registerTools.ts    Feature detection + registration/unregistration
     serialize.ts        Result envelopes, read helpers, argument parsing
-    tools/readTools.ts      9 read tools
+    sceneSnapshot.ts    On-demand JPEG capture of the live 3D canvas
+                        (backs the render_scene_snapshot read tool)
+    tools/readTools.ts      10 read tools (incl. render_scene_snapshot)
     tools/mutationTools.ts  11 mutation tools
 ```
 
@@ -100,10 +102,14 @@ The demo room is a **6.0 × 4.5 × 2.8 m** box in centered coordinates:
 
 `id`, `name`, `category` (15 categories), `price` (USD), meter extents
 `width/depth/height`, `styleTags`, `colors`, `material`, `stock`,
-`defaultRotation?`, `thumbnailGradient?`. All data is hand-authored in
-`src/data/products.ts`; nothing is fetched at runtime. A product's authored
-`colors` form its selectable colorways; its scalar `material` is the
-material component of every colorway.
+`defaultRotation?`, `thumbnailGradient?`, and the optional GLB-backing fields
+`modelUri?` (repo-served asset under `public/models/`) and `modelYaw?` (static
+yaw offset in degrees applied before the item's own rotation). All data is
+hand-authored in `src/data/products.ts`; nothing is fetched remotely — a
+product with `modelUri` loads its bundled model on demand, with the
+procedural builder as fallback. A product's authored `colors` form its
+selectable colorways; its scalar `material` is the material component of
+every colorway.
 
 ### Placed furniture (`PlacedFurniture`)
 
@@ -244,8 +250,8 @@ mounts exactly once inside the shell.
   renders only the requested surface; `AgentActivityFeed` is drawer content.
 - **Status bar (`WorkspaceStatusBar`):** `lg+` shows layout validity, piece
   count, spend, remaining budget, and the latest agent action (button opens
-  the activity drawer). Below `lg` it is a three-action bottom bar
-  (Furnish / Edit · validity dot / Activity).
+  the activity drawer). Below `lg` it is a four-action bottom bar
+  (Furnish / Edit · validity dot / Activity / Model credits).
 
 ### Panels
 
@@ -308,7 +314,21 @@ Components never hard-code hex values.
   frames/glass, and door/window clearances; clearance surfaces tint
   amber-neutral when clear and red when blocked. All textures come from
   `data/appearance.ts`; nothing is fetched.
+- `UserModelMesh` — session-local uploaded GLB models (`store.userModels`, a
+  visual layer outside the catalog: excluded from validation, budgets,
+  activity, WebMCP tools, and saved designs; save_design refuses while any
+  upload is placed). Auto-fitted to measured extents; object URL revoked on
+  removal.
+- `ModelCreditsPopover` — status-bar credits surface rendering
+  `data/modelCredits.ts` entries with their CC-BY sources.
 - `FurnitureMesh` — every catalog category maps to procedural primitives
+  Products with an optional `modelUri` render a bundled GLB instead of the
+  primitives (`public/models/`, credited in `data/modelCredits.ts` +
+  `THIRD_PARTY_NOTICES.md`): `useGLTF` loads on demand behind a Suspense
+  fallback of the procedural parts; the model is centered, uniformly
+  scaled to the product width, lifted to the floor, and optionally yawed
+  by `modelYaw`. Bounds are cached per uri; unmeasurable models or failed
+  loads keep the procedural representation (error boundary).
   (boxes/cylinders) sized to the product's real extents, with materials
   driven by each item's stored variant (primary color from `variant.color`,
   accent from the next authored color, roughness/metalness from
@@ -330,8 +350,9 @@ keyboard-accessible control outside the canvas.
 
 See `docs/WEBMCP.md` for the full protocol spec. In brief: `WebMcpProvider`
 calls `registerRoomTools()` in an effect, feature-detects
-`document.modelContext ?? navigator.modelContext`, registers 20 tools (9
-reads, 11 mutations — including `set_room_appearance`) with JSON schemas and
+`document.modelContext ?? navigator.modelContext`, registers 21 tools (10
+reads, 11 mutations — including `set_room_appearance` and
+`render_scene_snapshot`) with JSON schemas and
 safety annotations, and unregisters on cleanup (Strict Mode safe). Tools call
 the same store actions as the UI with `origin: 'agent'` and return
 serializable JSON or structured failures — no throws, no partial mutations.

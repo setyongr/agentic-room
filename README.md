@@ -15,7 +15,7 @@ Context API as a **shared, verifiable handoff between a web app and an
 agent**:
 
 - **No server-side MCP host needed.** The page is its own MCP server: it
-  registers 20 tools (9 reads, 11 mutations) with JSON schemas and safety
+  registers 21 tools (10 reads, 11 mutations) with JSON schemas and safety
   annotations against Chrome's in-browser Model Context API. There is no
   `webmcp` binary, no WebSocket daemon, no API key, and nothing to deploy
   besides the page itself.
@@ -51,7 +51,7 @@ agent**:
                     │        ▲                            ▲        │
                     │        │ same actions               │         │
                     │        │ origin: 'agent'            │         │
-  Chrome Model ─────┤  WebMcpProvider ── 20 tools ────────┘         │
+  Chrome Model ─────┤  WebMcpProvider ── 21 tools ────────┘         │
   Context API       │  (registerRoomTools)                          │
   (assistant /      │  document.modelContext.registerTool(...)      │
   console script)   └──────────────────────────────────────────────┘
@@ -60,7 +60,7 @@ agent**:
 - **Registration.** `WebMcpProvider` (mounted once inside `PlannerShell`)
   calls `registerRoomTools()` in a client effect. It feature-detects
   `document.modelContext` (and `navigator.modelContext` on experimental
-  builds), then registers the 20 tools sequentially, honoring an
+  builds), then registers the 21 tools sequentially, honoring an
   `AbortController` signal whose abort unregisters them — which makes the
   effect safe under React Strict Mode's mount → cleanup → mount cycle.
   Unsupported browsers get a no-op cleanup: the planner works, tools just
@@ -81,7 +81,7 @@ agent**:
 
 ## Capabilities
 
-- **Marketplace**: 78 hand-authored products across 15 categories with
+- **Marketplace**: 79 hand-authored products across 15 categories with
   prices, meter dimensions, style tags, colors, materials, and stock; search
   with free-text, category, style, color, material, and price filters,
   deterministic sorting (relevance / price / name), and pagination. Product
@@ -114,13 +114,13 @@ agent**:
   through WebMCP. Agent-only helpers add structured zone, pressure, and
   alternative analysis.
 
-## The tool surface — 20 tools
+## The tool surface — 21 tools
 
 All results are JSON strings: `{success:true, ...}` or
 `{success:false, error, code, ...details}`. Argument names match the JSON
 schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 
-### Reads (9) — read-only, never mutate state
+### Reads (10) — read-only, never mutate state
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
@@ -133,6 +133,7 @@ schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 | `get_budget_pressure` | under/at/over-budget status, remaining, amount over, replaceable marketplace items sorted by price (most expensive first) | — |
 | `find_cheaper_alternatives` | Cheaper same-category, in-stock replacements for one placed marketplace item, ranked by style/color/material/dimension compatibility then savings, with scores | `instanceId`, `targetPrice?`, `maxResults?` |
 | `get_saved_designs` | Designs saved this session, newest first, with budget, item count, marketplace total, and room appearance at save time | — |
+| `render_scene_snapshot` | Render the live 3D room to a JPEG data URL so an agent can judge the visual result: `view` = `live` or the standard `orbit`/`top`/`front`/`side` overviews (user camera untouched); downscaled to `maxWidth`; canvas only, never UI text | `view?`, `maxWidth?` |
 
 ### Mutations (11) — same store actions as the UI, `origin: 'agent'`
 
@@ -326,7 +327,7 @@ src/
     three/          R3F scene: room architecture, furniture meshes,
                     camera controller (orbit/top/front/side), canvas
     WebMcpProvider  single Model Context registry host for the page
-  data/             deterministic catalog (78 products), placement zones,
+  data/             deterministic catalog (79 products), placement zones,
                     room appearance registry, demo presets (default demo +
                     Budget Rescue)
   domain/           pure logic: catalog, placement, validation, pricing,

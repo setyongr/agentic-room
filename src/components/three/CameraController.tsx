@@ -26,7 +26,7 @@ const SAFE_FLIGHT_RADIUS = 5.2;
  * while the mode is active. Spherical angles are polar `phi` from +y and
  * azimuth `theta` from +z (the OrbitControls convention).
  */
-interface CameraPreset {
+export interface CameraPreset {
   /** point the camera keeps framing */
   target: readonly [number, number, number];
   /** distance from the target, meters */
@@ -45,7 +45,7 @@ interface CameraPreset {
   maxAzimuth: number;
 }
 
-const PRESETS: Record<CameraMode, CameraPreset> = {
+export const PRESETS: Record<CameraMode, CameraPreset> = {
   /** Free three-quarter design view with a tight zoom floor and a wide orbit. */
   orbit: {
     target: [0, 1.3, 0],

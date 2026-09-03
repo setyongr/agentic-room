@@ -6,6 +6,7 @@ import { resolveAppearance } from '@/data/appearance';
 import { useRoomStore } from '@/store/roomStore';
 import { CameraController } from '@/components/three/CameraController';
 import { RoomScene } from '@/components/three/RoomScene';
+import { SceneSnapshotBridge } from '@/components/three/SceneSnapshotBridge';
 
 /**
  * Client-only full-container 3D viewport for the living-room editor.
@@ -42,7 +43,11 @@ export function RoomCanvas() {
   const cameraMode = useRoomStore((state) => state.cameraMode);
   const roomAppearance = useRoomStore((state) => state.roomAppearance);
   const selectItem = useRoomStore((state) => state.selectItem);
-  const handlePointerMissed = useCallback(() => selectItem(null), [selectItem]);
+  const selectUserModel = useRoomStore((state) => state.selectUserModel);
+  const handlePointerMissed = useCallback(() => {
+    selectItem(null);
+    selectUserModel(null);
+  }, [selectItem, selectUserModel]);
   const voidColor = useMemo(
     () => resolveAppearance(roomAppearance).wall.voidColor,
     [roomAppearance],
@@ -68,6 +73,7 @@ export function RoomCanvas() {
           }
         >
           <RoomScene />
+          <SceneSnapshotBridge />
           <CameraController mode={cameraMode} />
         </Suspense>
       </Canvas>

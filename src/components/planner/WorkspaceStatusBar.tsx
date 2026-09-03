@@ -3,6 +3,7 @@
 import { CheckCircle2, PackageSearch, PencilRuler, Sparkles, TriangleAlert } from 'lucide-react';
 import { selectTotals, selectValidationValid } from '@/store/selectors';
 import { useRoomStore } from '@/store/roomStore';
+import { ModelCreditsPopover } from '@/components/planner/ModelCreditsPopover';
 
 export type SidebarMode = 'catalog' | 'edit';
 
@@ -46,6 +47,7 @@ export function WorkspaceStatusBar({
               : `${money.format(totals.remaining)} left`}
           </span>
         </div>
+        <ModelCreditsPopover />
         <button
           type="button"
           onClick={onOpenActivity}
@@ -59,7 +61,7 @@ export function WorkspaceStatusBar({
         </button>
       </div>
 
-      <div className="grid h-15 grid-cols-3 lg:hidden">
+      <div className="grid h-15 grid-cols-4 lg:hidden">
         <button
           type="button"
           onClick={() => onOpenSidebar('catalog')}
@@ -92,6 +94,7 @@ export function WorkspaceStatusBar({
           <Sparkles className="size-4" aria-hidden="true" />
           Activity{activity.length > 0 ? ` · ${activity.length}` : ''}
         </button>
+        <ModelCreditsPopover layout="cell" />
       </div>
     </footer>
   );

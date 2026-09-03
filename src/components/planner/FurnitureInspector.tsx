@@ -38,11 +38,20 @@ export function FurnitureInspector() {
   const rotateProduct = useRoomStore((state) => state.rotateProduct);
   const removeProduct = useRoomStore((state) => state.removeProduct);
   const setItemLocked = useRoomStore((state) => state.setItemLocked);
+  const userModels = useRoomStore((state) => state.userModels);
+  const selectedUserModelId = useRoomStore((state) => state.selectedUserModelId);
+  const selectUserModel = useRoomStore((state) => state.selectUserModel);
+  const moveUserModel = useRoomStore((state) => state.moveUserModel);
+  const rotateUserModel = useRoomStore((state) => state.rotateUserModel);
+  const removeUserModel = useRoomStore((state) => state.removeUserModel);
+  const setUserModelLocked = useRoomStore((state) => state.setUserModelLocked);
+  const selectedUserModel = userModels.find((m) => m.id === selectedUserModelId);
   const [x, setX] = useState('');
   const [z, setZ] = useState('');
+  const [umX, setUmX] = useState('');
+  const [umZ, setUmZ] = useState('');
   const [message, setMessage] = useState('');
   const [messageKind, setMessageKind] = useState<'success' | 'error'>('success');
-
   useEffect(() => {
     if (!selectedItem) {
       setX('');
@@ -53,6 +62,72 @@ export function FurnitureInspector() {
     setX(coordinate(selectedItem.position.x));
     setZ(coordinate(selectedItem.position.z));
   }, [selectedItem]);
+
+  // Uploaded-model state sync: mirror the selected model's coordinates into the form.
+  useEffect(() => {
+    const model = userModels.find((m) => m.id === selectedUserModelId);
+    if (!model) {
+      setUmX('');
+      setUmZ('');
+      return;
+    }
+    setUmX(coordinate(model.position.x));
+    setUmZ(coordinate(model.position.z));
+  }, [selectedUserModelId, userModels]);
+
+  const applyUserModelMove = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const model = userModels.find((m) => m.id === selectedUserModelId);
+    if (!model) return;
+    const nextX = Number(umX);
+    const nextZ = Number(umZ);
+    if (umX.trim() === '' || umZ.trim() === '' || !Number.isFinite(nextX) || !Number.isFinite(nextZ)) {
+      announce('Enter valid numeric X and Z coordinates before applying the move.', 'error');
+      return;
+    }
+    const result = moveUserModel(model.id, nextX, nextZ);
+    if (!result.ok) {
+      announce(result.message, 'error');
+      return;
+    }
+    announce(`Moved “${model.name}” to X ${coordinate(nextX)}, Z ${coordinate(nextZ)}.`, 'success');
+  };
+
+  const rotateUserModelBy = (degrees: number) => {
+    const model = userModels.find((m) => m.id === selectedUserModelId);
+    if (!model) return;
+    const rotation = model.rotation + degrees;
+    const result = rotateUserModel(model.id, rotation);
+    if (!result.ok) {
+      announce(result.message, 'error');
+      return;
+    }
+    announce(`Rotated “${model.name}” to ${coordinate(result.data.rotation)} degrees.`, 'success');
+  };
+
+  const toggleUserModelLock = () => {
+    const model = userModels.find((m) => m.id === selectedUserModelId);
+    if (!model) return;
+    const locked = !model.locked;
+    const result = setUserModelLocked(model.id, locked);
+    if (!result.ok) {
+      announce(result.message, 'error');
+      return;
+    }
+    announce(`${locked ? 'Locked' : 'Unlocked'} “${model.name}”.`, 'success');
+  };
+
+  const removeUserModelItem = () => {
+    const model = userModels.find((m) => m.id === selectedUserModelId);
+    if (!model) return;
+    const result = removeUserModel(model.id);
+    if (!result.ok) {
+      announce(result.message, 'error');
+      return;
+    }
+    announce(`Removed “${model.name}” from the room.`, 'success');
+  };
+
 
   const announce = (nextMessage: string, kind: 'success' | 'error') => {
     setMessageKind(kind);
@@ -189,6 +264,40 @@ export function FurnitureInspector() {
             </ul>
           )}
         </section>
+
+        {userModels.length > 0 ? (
+          <section className="border-b px-4 py-3 sm:px-5" aria-labelledby="user-models-title">
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <h3 id="user-models-title" className="text-small font-semibold text-text">Uploaded models</h3>
+              <span className="text-small tabular-nums text-text-muted">{userModels.length}</span>
+            </div>
+            <ul className="space-y-1" aria-label="Uploaded models">
+              {userModels.map((model) => {
+                const selected = model.id === selectedUserModelId;
+                return (
+                  <li key={model.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectUserModel(model.id);
+                        setMessage(`Selected “${model.name}”.`);
+                        setMessageKind('success');
+                      }}
+                      aria-current={selected ? 'true' : undefined}
+                      className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-control px-3 py-2 text-left text-small transition-colors motion-reduce:transition-none ${selected ? 'bg-accent-soft text-accent-strong' : 'text-text hover:bg-surface-muted'}`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{model.name}</span>
+                        <span className="block text-xs text-text-muted">Uploaded model · session only</span>
+                      </span>
+                      {model.locked ? <LockKeyhole className="size-4 shrink-0 text-text-muted" aria-label="Locked" /> : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
 
         {selectedItem ? (
           <section className="space-y-5 px-4 py-5 sm:px-5" aria-labelledby="selected-piece-title">
@@ -372,6 +481,139 @@ export function FurnitureInspector() {
                 </ul>
               )}
             </section>
+          </section>
+        ) : selectedUserModel ? (
+          <section className="space-y-5 px-4 py-5 sm:px-5" aria-labelledby="user-model-title">
+            <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">Selected upload</p>
+                  <h3 id="user-model-title" className="mt-1 truncate text-subheading font-semibold tracking-tight text-text">{selectedUserModel.name}</h3>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={`rounded-pill px-2.5 py-1 text-xs font-semibold ${selectedUserModel.locked ? 'bg-warning-soft text-warning' : 'bg-surface-muted text-text-muted'}`}
+                  >
+                    {selectedUserModel.locked ? 'Locked' : 'Unlocked'}
+                  </span>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-control px-2 text-xs font-semibold text-accent-strong transition-colors hover:bg-accent-soft motion-reduce:transition-none"
+                    onClick={() => {
+                      selectUserModel(null);
+                      announce('Selection cleared.', 'success');
+                    }}
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-small">
+                <div>
+                  <dt className="text-text-muted">Source</dt>
+                  <dd className="mt-0.5 font-medium text-text">Uploaded model (session only)</dd>
+                </div>
+                <div>
+                  <dt className="text-text-muted">Cost</dt>
+                  <dd className="mt-0.5 font-medium tabular-nums text-text">Not counted toward budget</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-text-muted">Dimensions</dt>
+                  <dd className="mt-0.5 font-medium tabular-nums text-text">
+                    {coordinate(selectedUserModel.width)} W × {coordinate(selectedUserModel.depth)} D × {coordinate(selectedUserModel.height)} H m
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-text-muted">X / Z</dt>
+                  <dd className="mt-0.5 font-medium tabular-nums text-text">
+                    {coordinate(selectedUserModel.position.x)} / {coordinate(selectedUserModel.position.z)} m
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-text-muted">Rotation</dt>
+                  <dd className="mt-0.5 font-medium tabular-nums text-text">{coordinate(selectedUserModel.rotation)}°</dd>
+                </div>
+              </dl>
+            </div>
+
+            <form onSubmit={applyUserModelMove} className="border-t pt-4" aria-labelledby="user-model-position-title">
+              <h4 id="user-model-position-title" className="text-small font-semibold text-text">Position</h4>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="grid gap-1.5 text-small font-medium text-text" htmlFor="user-model-x-coordinate">
+                  X coordinate (m)
+                  <input
+                    id="user-model-x-coordinate"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.05"
+                    value={umX}
+                    onChange={(event) => setUmX(event.target.value)}
+                    className="min-h-11 rounded-control border bg-surface-raised px-3 tabular-nums text-text shadow-none outline-none transition-colors placeholder:text-text-faint focus:border-accent motion-reduce:transition-none"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-small font-medium text-text" htmlFor="user-model-z-coordinate">
+                  Z coordinate (m)
+                  <input
+                    id="user-model-z-coordinate"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.05"
+                    value={umZ}
+                    onChange={(event) => setUmZ(event.target.value)}
+                    className="min-h-11 rounded-control border bg-surface-raised px-3 tabular-nums text-text shadow-none outline-none transition-colors placeholder:text-text-faint focus:border-accent motion-reduce:transition-none"
+                  />
+                </label>
+              </div>
+              <button
+                type="submit"
+                className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent px-4 py-2 text-small font-semibold text-on-accent transition-colors hover:bg-accent-strong motion-reduce:transition-none"
+              >
+                <MoveHorizontal className="size-4" aria-hidden="true" />
+                Apply move
+              </button>
+            </form>
+
+            <section className="border-t pt-4" aria-labelledby="user-model-rotation-title">
+              <h4 id="user-model-rotation-title" className="text-small font-semibold text-text">Rotation</h4>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {[-15, 15, 90].map((degrees) => (
+                  <button
+                    key={degrees}
+                    type="button"
+                    onClick={() => rotateUserModelBy(degrees)}
+                    className="inline-flex min-h-11 items-center justify-center gap-1 rounded-control border bg-surface-raised px-2 text-small font-semibold text-text transition-colors hover:bg-surface-muted motion-reduce:transition-none"
+                  >
+                    <RotateCw className={`size-3.5 ${degrees < 0 ? '-scale-x-100' : ''}`} aria-hidden="true" />
+                    {degrees > 0 ? '+' : ''}{degrees}°
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-2 border-t pt-4" aria-label="Uploaded model actions">
+              <button
+                type="button"
+                onClick={toggleUserModelLock}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control border bg-surface-raised px-4 py-2 text-small font-semibold text-text transition-colors hover:bg-surface-muted motion-reduce:transition-none"
+              >
+                {selectedUserModel.locked ? <UnlockKeyhole className="size-4" aria-hidden="true" /> : <LockKeyhole className="size-4" aria-hidden="true" />}
+                {selectedUserModel.locked ? 'Unlock model' : 'Lock model'}
+              </button>
+              {!selectedUserModel.locked ? (
+                <button
+                  type="button"
+                  onClick={removeUserModelItem}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control border border-error bg-error-soft px-4 py-2 text-small font-semibold text-error transition-colors hover:bg-error-soft motion-reduce:transition-none"
+                >
+                  <Trash2 className="size-4" aria-hidden="true" />
+                  Remove model
+                </button>
+              ) : null}
+            </section>
+
+            <p className="border-l-2 border-border py-2 pl-3 text-xs leading-5 text-text-muted">
+              Uploaded models live only in this session: they are excluded from validation, budgets, agent tools, and saved designs.
+            </p>
           </section>
         ) : (
           <section className="px-4 py-6 sm:px-5" aria-live="polite">
