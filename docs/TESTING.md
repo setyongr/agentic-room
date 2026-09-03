@@ -47,14 +47,15 @@ catalog products and the seeded room — no React, no store, no WebMCP.
 
 | Suite | Tests | Contract covered |
 | --- | --- | --- |
-| `validation.test.ts` | 5 | Out-of-bounds detection; overlap tolerance; east-window, balcony-door, and entry-door clearance blocking. Each fixture isolates exactly one issue so removing the validator fails the test. |
-| `placement.test.ts` | 13 | Locked items reject removal/replacement with `item_locked`; locked items stay movable/rotatable; failed actions never mutate caller-owned arrays; unlocked removal succeeds. Variant contract: catalog-default resolution, authored colorway storage, `invalid_variant` rejection with available-value details, variant preservation across move/rotate/lock, and keep-or-reset color on replacement. |
-| `resize.test.ts` | 12 | `resizeRoom`: supported-range enforcement (`invalid_room_size` with limits details); proportional opening rescaling per wall (grow/shrink, on-wall clamping, ceiling height caps that never re-grow), opening removal when a wall becomes too short; zone rescaling with unusable-zone drops; identical-dimension no-op preserving the input reference; input immutability; stable survivor order; sequential resizes from live dimensions. |
+| `validation.test.ts` | 11 | Out-of-bounds detection; overlap tolerance with vertical-band semantics; `height_bounds` ceiling/floor checks; east-window (sill-aware), balcony-door, and entry-door clearance blocking. Each fixture isolates exactly one issue so removing the validator fails the test. |
+| `placement.test.ts` | 24 | Locked items reject removal/replacement with `item_locked`; locked items stay movable/rotatable; failed actions never mutate caller-owned arrays; unlocked removal succeeds. Variant contract: catalog-default resolution, authored colorway storage, `invalid_variant` rejection with available-value details, variant preservation across move/rotate/lock, and keep-or-reset color on replacement. Ownership re-tagging (`setItemSource`) preserves every other field, allows locked items, no-ops on the same source. Elevation (`setItemElevation`) rejects negative/non-finite heights with `invalid_elevation`, no-ops on the same height, and `moveProduct` preserves the raised height. |
+| `resize.test.ts` | 47 | `resizeRoom`: supported-range enforcement (`invalid_room_size` with limits details); proportional opening rescaling per wall (grow/shrink, on-wall clamping, ceiling height caps that never re-grow), opening removal when a wall becomes too short; zone rescaling with unusable-zone drops; identical-dimension no-op preserving the input reference; input immutability; stable survivor order; sequential resizes from live dimensions. Opening placement: `moveOpening` along a wall or onto another wall (clamped, `opening_overlap` on collisions), `addOpening` presets with auto-centering on the first free span, `removeOpening`, and `setOpeningDimensions` width/height/sill limits (`invalid_opening_size` details) — each with deterministic error codes and input immutability. `emptyRoom`: empty openings with zones scaled/dropped for any footprint. |
 | `pricing.test.ts` | 6 | Existing items contribute $0; marketplace items price at current catalog prices; signed remaining/over-budget semantics; missing catalog products never corrupt totals; replacement repricing is exact. |
 | `alternatives.test.ts` | 5 | Candidates are in-stock, strictly cheaper, same category, dimensionally compatible; savings exact; ranking deterministic (pinned order); `maxResults`/`targetPrice` respected; structured errors (`missing_instance`, `existing_instance`, `locked_instance`, `missing_product`). |
 | `appearance.test.ts` | 7 | `updateRoomAppearance`: immutable single-field updates; same-value/empty patches return the original reference; invalid wall/floor/wallpaper ids rejected in wall → floor → wallpaper order with exact `field`/`allowedValues` details. |
 | `designs.test.ts` | 10 | Snapshot capture/restore fidelity and deep-copy isolation (mutating one side never affects the other); seeded demo snapshot restores byte-identically; corrupt/duplicate input rejected with structured codes. Room appearance and per-item variants round-trip byte-for-byte and are deep-cloned; missing/malformed appearance or variant data fails with `invalid_snapshot`. |
-| `cart.test.ts` | 8 | Marketplace-only adds (existing sofa/rug can never enter); all-or-nothing rejection; unique line ids; dedupe of already-carted instances; totals match catalog prices. |
+| `cart.test.ts` | 19 | Marketplace-only adds (existing sofa/rug can never enter); all-or-nothing rejection; unique line ids; dedupe of already-carted instances; totals match catalog prices. Per-line `removeCartItem` recalculates totals, supports prune-to-empty, and fails with `cart_item_not_found`/`cart_checked_out`. Mock `checkoutCart` returns a deterministic order summary and marks the cart checked out (`cart_empty` guard); `clearCart` restarts an empty active cart. |
+| `catalog.test.ts` | 6 | Catalog integrity: data/domain category lists in sync, unique ids, positive extents, colors/materials inside the filter vocabularies. Audio-visual additions: TV/soundbar/speaker categories searchable, name-queryable, and placeable on the media-wall zone. |
 
 ## 3. WebMCP verification (browser)
 
@@ -87,8 +88,10 @@ failed calls, and no-op mutations need not add an activity entry.
 
 1. **Every read tool** returns `success: true` with no room-design change
    (`get_room_state` item count is unchanged after the batch). Fixed-template
-   activity entries are allowed. Scene capture requires a mounted, working
-   WebGL canvas; before it is ready, expect `capture_unavailable`.
+   activity entries are allowed. `get_planner_guide` returns the static site
+   orientation payload (site identity, capabilities with their tool names,
+   workflow, boundaries) and logs nothing. Scene capture requires a mounted,
+   working WebGL canvas; before it is ready, expect `capture_unavailable`.
 2. **Every mutation tool** round-trips: `place_product` → item appears in
    `get_room_state` and in the Edit rail list; `move_product`/`rotate_product`
    update `position`/`rotation`; `set_item_locked` flips `locked`;
@@ -108,6 +111,23 @@ failed calls, and no-op mutations need not add an activity entry.
    the same call again → `status: "unchanged"`; resizing narrower than a
    seeded piece leaves the item coordinates untouched and surfaces it in
    `validation` as `out_of_bounds`; resetting the room restores 6 × 4.5 × 2.8.
+   New-tool round-trips:
+   - `set_item_source` flips `source` between `existing`/`marketplace` and
+     moves the item in/out of `pricing.newTotal`; repeating the same source
+     is a no-op success.
+   - `set_item_elevation` changes `position.y` (raise a TV to ~1.2 m); a
+     `move_product` afterwards keeps that height; y = 3 surfaces a
+     `height_bounds` layout error.
+   - `move_opening` slides an opening along its wall (`alongCenterM`
+     changes); `wall` relocates it to another wall; `add_opening` adds a
+     standard door/window to any wall (id `opening-N` appears in
+     `get_room_state.room.openings`); `remove_opening` deletes it;
+     `resize_opening` changes `alongWidthM`/`heightM`/`sillM`, and the 3D
+     scene frames follow the new sill.
+   - `remove_cart_item` drops one `add_to_cart` line and shrinks the cart
+     total; `new_project` returns `furnitureCount` 0 and `openingCount` 0
+     while `get_room_state.room.dimensions` keeps the measured size and the
+     default demo room still returns on a fresh page load.
 3. **Invalid calls return helpful errors** (all `success: false`):
    - `set_budget` with `-1` → `invalid_args`
    - `place_product` with an unknown product → `missing_product`
@@ -123,6 +143,15 @@ failed calls, and no-op mutations need not add an activity entry.
      explicit ids → `invalid_args`
    - `resize_room` with out-of-range dimensions (e.g. width 1.5 or height
      2.2) → `invalid_room_size` with `dimensions`/`limits` details
+   - `move_opening`/`add_opening` onto a spot occupied by another opening on
+     the same wall → `opening_overlap`; unknown opening ids →
+     `opening_not_found`; `resize_opening` beyond the wall/ceiling limits →
+     `invalid_opening_size` with `field`/`min`/`max` details
+   - `set_item_elevation` with a negative `y` → `invalid_args`
+   - `remove_cart_item` for an instance with no cart line →
+     `cart_item_not_found`; `checkout_cart`-equivalent UI paths are refused
+     on an empty or already-checked-out cart (`cart_empty`,
+     `cart_checked_out`)
    - State must be unchanged after each failure (no partial mutation).
 4. **Scene sync:** after an agent `place_product`, the 3D room shows the new
    piece (camera Top view helps) and the header spend figure updates.
@@ -143,6 +172,12 @@ See [Demo workflows](DEMOS.md) for the commands and expected results:
   `replace_product` swaps (165 + 131 + 70 + 90 savings) → `newTotal: 684`,
   `remaining: 316`, layout valid; each swap preserves instance id, position,
   rotation, and source.
+- **Start empty, hang a TV, cut a window:** place Aria 55" OLED TV on the
+  media wall → `add_to_cart` then `remove_cart_item` (cart empty again) →
+  `set_item_source` to `existing` (newTotal back to 0) → `set_item_elevation`
+  y 1.2 (hangs) → `add_opening` window on the north wall → `resize_opening`
+  sill 1.1 × height 1.2 → `check_layout` valid → `new_project` returns
+  `furnitureCount` 0 and `openingCount` 0 at the measured size.
 
 ## 4. Human UI verification
 
@@ -160,6 +195,22 @@ See [Demo workflows](DEMOS.md) for the commands and expected results:
   shrinking below a piece's extents flags it out-of-bounds in the status bar;
   Reset to demo size restores 6 × 4.5 × 2.8 m; preset camera views keep the
   resized room framed.
+- Doors & windows (same Room size tab, below the size form): every opening
+  lists its wall, movable range, Move/nudge controls, a "Move to wall"
+  selector, Remove with confirm, and a Size block (width/height, plus sill
+  height for windows — the window's vertical position). "Add an opening"
+  drops a standard door/window onto any wall's first free span; the 3D
+  frames, glass, and clearance follow every change.
+- Edit rail on a selected piece: Ownership (Already owned / Buy new) moves
+  the piece in/out of the marketplace spend instantly; Height above floor
+  (input + 0 / 0.45 / 1.2 m presets) lifts pieces off the floor, and the
+  X / Y / Z readout reflects it; sliding the piece keeps its height.
+- Designs drawer: "New empty project" (two-step confirm) clears every piece,
+  door, and window at the current room size and resets budget/finishes,
+  while a fresh page load still shows the default demo room.
+- Cart drawer: per-line remove buttons, then a mock "Checkout {total}"
+  button → checked-out state with order announcement; "Start a new cart"
+  resets it for the next shopping round.
 - Budget control in the top bar opens a dialog; applying a value updates the
   header spend, status bar, and validation instantly; invalid (negative)
   values show an inline error.
@@ -167,7 +218,8 @@ See [Demo workflows](DEMOS.md) for the commands and expected results:
   it to the list; Load restores it; Reset room (two-step confirm) and Load
   Budget Rescue behave.
 - Cart drawer: placing marketplace items enables "Add N room item(s)"; cart
-  totals match the marketplace spend.
+  totals match the marketplace spend; line totals and the estimated total
+  update after removals and after the mock checkout.
 - Agent activity: after the WebMCP checks in §3, the newest six entries show
   with the "Latest" chip and monetary amounts on money events.
 - A status message from any action is announced politely (screen-reader

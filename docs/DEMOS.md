@@ -67,3 +67,41 @@ report the savings (165 + 131 + 70 + 90 = **$456 rescued**). The result:
 valid. The feed tracks the whole rescue: "Found 1 cheaper alternative for
 “Terra Coffee Table”", then one "Replaced … with …" entry per swap, each with
 its dollar amount.
+
+
+## Start empty, hang a TV, and cut a window
+
+Exercises the newest tools: ownership, elevation (wall mounting), the
+doors/windows editor, cart pruning, and the empty-project start. Run it
+from the default demo room (fresh page load).
+
+```js
+await run('get_room_state');   // 3 items, 3 openings, budget 700, newTotal 0
+// Marketplace TV on the media wall (footprint valid, zone has capacity).
+await run('place_product', { productId: 'aria-55-oled-tv', zoneId: 'media-wall' });
+                                // $1,190 newTotal — deliberately over the $700 budget for now
+// Buy it for real, then decide it is already owned.
+await run('add_to_cart', { instanceIds: ['aria-55-oled-tv-1'] });   // 1 line, total $1,190
+await run('remove_cart_item', { instanceId: 'aria-55-oled-tv-1' }); // cart empty again
+await run('set_item_source', { instanceId: 'aria-55-oled-tv-1', source: 'existing' });
+                                // newTotal 0, remaining 700, layout valid again
+// Hang it on the wall instead of the floor.
+await run('set_item_elevation', { instanceId: 'aria-55-oled-tv-1', y: 1.2 });
+                                // position.y 1.2; a later move_product keeps the height
+// Cut a window into the empty north wall, then raise its sill (its Y axis).
+await run('add_opening', { kind: 'window', wall: 'north', center: 0 });   // opening-1
+await run('resize_opening', { openingId: 'opening-1', sillHeight: 1.1, height: 1.2 });
+                                // alongWidthM 1.6, sillM 1.1; top 2.3 m stays under the ceiling
+await run('check_layout');      // { success: true, valid: true, issueCount: 0 }
+// Clear the canvas for a real project; the measured room size is kept.
+await run('new_project');       // furnitureCount 0, openingCount 0, dimensions 6 x 4.5 x 2.8
+```
+
+The feed records each step with fixed templates ("Added 1 item to the
+cart", "Removed \u201cAria 55\" OLED TV\u201d from the cart", "Marked … as an
+existing owned piece", "Set the height of … to 1.20 m above the floor",
+"Added a window \u201copening-1\u201d on the north wall (1.60 m wide)",
+"Resized the window \u201copening-1\u201d to 1.60 m wide × 1.20 m tall,
+sill 1.10 m", and "Started an empty project: cleared 4 items and 4 openings;
+room stays 6 × 4.50 × 2.80 m"). Mock checkout and "Start a new cart" are
+deliberate UI-only surfaces — no WebMCP tools exist for them.
