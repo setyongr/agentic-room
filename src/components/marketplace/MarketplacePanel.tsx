@@ -21,6 +21,7 @@ import { useRoomStore } from '@/store/roomStore';
 import { RoomAppearancePanel } from '@/components/marketplace/RoomAppearancePanel';
 import { RoomSizePanel } from '@/components/marketplace/RoomSizePanel';
 import { prepareUserGlb, revokePreparedGlb } from '@/components/marketplace/glbUpload';
+import { useProductThumbnail } from '@/components/three/modelThumbnail';
 
 const PAGE_SIZE = 12;
 const CURRENCY = new Intl.NumberFormat('en-US', {
@@ -511,6 +512,11 @@ function ProductCard({
   const categoryLabel = CATEGORY_LABELS[product.category] ?? product.category;
   const detailsId = `product-details-${product.id}`;
   const gradient = product.thumbnailGradient ?? 'var(--surface-muted)';
+  // Committed raster wins; everything else gets a session runtime thumbnail
+  // (GLB render for model-backed products, procedural render otherwise).
+  const staticPreview = product.previewImage;
+  const dynamicPreview = useProductThumbnail(staticPreview === undefined ? product : undefined, selectedColor);
+  const previewSrc = staticPreview ?? dynamicPreview;
   const soldOutVeil = !available ? (
     <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-surface/60 text-xs font-semibold text-text">
       Sold out
@@ -521,6 +527,16 @@ function ProductCard({
     return (
       <article className="flex min-h-36 overflow-hidden rounded-card border border-border bg-surface">
         <div className="relative w-20 shrink-0 border-r border-border" style={{ background: gradient }} aria-hidden="true">
+          {previewSrc ? (
+            <img
+              src={previewSrc}
+              alt=""
+              draggable={false}
+              loading="lazy"
+              decoding="async"
+              className="absolute inset-x-1 top-1/2 aspect-square w-[calc(100%-0.5rem)] -translate-y-1/2 rounded-card border border-border object-cover shadow-sm"
+            />
+          ) : null}
           {soldOutVeil}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
@@ -583,7 +599,17 @@ function ProductCard({
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface transition-colors hover:border-accent/50 motion-reduce:transition-none">
-      <div className="relative h-24 w-full shrink-0" style={{ background: gradient }} aria-hidden="true">
+      <div className="relative h-24 w-full shrink-0 overflow-hidden" style={{ background: gradient }} aria-hidden="true">
+        {previewSrc ? (
+          <img
+            src={previewSrc}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : null}
         <button
           type="button"
           aria-label={`View details for ${product.name}`}

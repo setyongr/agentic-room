@@ -73,7 +73,16 @@ README.md           product overview, quick start, demo workflows
 7. **No new runtime dependencies or network assets** without an explicit
    ask. The 3D scene is procedural by default; products may opt into a
    bundled, repo-served GLB (`modelUri`, credited in `THIRD_PARTY_NOTICES.md`)
-   that loads on demand with a procedural fallback. Thumbnails are CSS gradients.
+   that loads on demand with a procedural fallback. Product tiles are CSS
+   gradients; model-backed products may ship a pre-rendered raster preview
+   (`previewImage`, generated from the GLB) so the GLB never loads just for a
+   thumbnail. Products without a committed preview — including session user
+   uploads — get a best-effort session-cached thumbnail rendered once on an
+   offscreen canvas by `src/components/three/modelThumbnail.ts` (GLB-backed
+   products load their model; every other product reuses the same procedural
+   part builders as the 3D scene), falling back to the gradient tile when
+   WebGL or decoding fails; no UI path ever keeps a model in memory for
+   previews.
 
 ## Conventions
 

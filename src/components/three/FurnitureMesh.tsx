@@ -38,7 +38,7 @@ const INVALID_RING_COLOR = '#C96F4A';
  * floor at y = 0. Geometry segment counts are capped so total cost stays
  * low even with a fully furnished room.
  */
-type Part = PartBase &
+export type Part = PartBase &
   (
     | { kind: 'box'; args: [number, number, number] }
     | { kind: 'cylinder'; args: [number, number, number, number] }
@@ -367,7 +367,7 @@ function buildDecor(p: FurnitureProduct): Part[] {
 }
 
 /** Selects the geometry builder for a product's category. */
-function buildParts(product: FurnitureProduct): Part[] {
+export function buildParts(product: FurnitureProduct): Part[] {
   switch (product.category) {
     case 'sofa':
       return buildSofa(product);
@@ -409,7 +409,7 @@ function buildParts(product: FurnitureProduct): Part[] {
 /* ------------------------------------------------------------------ */
 
 /** Builds the category's material list; selected items get a soft glow. */
-function buildMaterials(
+export function buildMaterials(
   product: FurnitureProduct,
   variant: FurnitureVariant,
   selected: boolean,
@@ -489,7 +489,7 @@ function buildMaterials(
 }
 
 /** Generates parts + materials; stable until product/variant/selection changes. */
-function buildModel(
+export function buildModel(
   product: FurnitureProduct,
   variant: FurnitureVariant,
   selected: boolean,

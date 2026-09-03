@@ -14,6 +14,7 @@ import {
 import { furnitureHex } from '@/data/appearance';
 import { selectSelectedItem, selectSelectedProduct } from '@/store/selectors';
 import { useRoomStore } from '@/store/roomStore';
+import { useModelThumbnail } from '@/components/three/modelThumbnail';
 
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -286,6 +287,9 @@ export function FurnitureInspector() {
                       aria-current={selected ? 'true' : undefined}
                       className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-control px-3 py-2 text-left text-small transition-colors motion-reduce:transition-none ${selected ? 'bg-accent-soft text-accent-strong' : 'text-text hover:bg-surface-muted'}`}
                     >
+                      <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-control border border-border bg-surface-muted">
+                        <UserModelThumb url={model.url} className="size-full object-cover" />
+                      </span>
                       <span className="min-w-0">
                         <span className="block truncate font-medium">{model.name}</span>
                         <span className="block text-xs text-text-muted">Uploaded model · session only</span>
@@ -508,6 +512,11 @@ export function FurnitureInspector() {
                   </button>
                 </div>
               </div>
+              <div className="mt-3 flex justify-center" aria-hidden="true">
+                <div className="size-36 overflow-hidden rounded-card border border-border">
+                  <UserModelThumb url={selectedUserModel.url} className="size-full object-cover" />
+                </div>
+              </div>
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-small">
                 <div>
                   <dt className="text-text-muted">Source</dt>
@@ -632,4 +641,11 @@ export function FurnitureInspector() {
       </p>
     </aside>
   );
+}
+
+/** Session-generated thumbnail for an uploaded GLB; hidden until ready. */
+function UserModelThumb({ url, className }: { url: string; className: string }) {
+  const src = useModelThumbnail(url);
+  if (src === undefined) return null;
+  return <img src={src} alt="" draggable={false} className={className} />;
 }

@@ -134,6 +134,9 @@ export interface FurnitureProduct {
   defaultRotation?: number;
   /** CSS background gradient used for the catalog thumbnail. */
   thumbnailGradient?: string;
+  /** Optional pre-rendered raster preview (repo-served) of the model-backed
+   * product, shown in catalog thumbnail slots so the GLB never loads for a preview. */
+  previewImage?: string;
   /** Optional repo-served GLB model that replaces the procedural builder. */
   modelUri?: string;
   /** Static yaw offset in degrees applied to the GLB before the item rotation. */
@@ -243,6 +246,7 @@ export const PRODUCTS: readonly FurnitureProduct[] = [
     material: 'linen',
     stock: 8,
     thumbnailGradient: 'linear-gradient(135deg, #26262A, #6B6F76)',
+    previewImage: '/previews/noir-studio-sofa.png',
     modelUri: '/models/sofa-ak-studio.glb',
     modelYaw: 180,
   },

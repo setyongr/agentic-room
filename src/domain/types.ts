@@ -248,6 +248,9 @@ export interface FurnitureProduct {
   defaultRotation?: number;
   /** CSS gradient string used as a thumbnail placeholder, e.g. "linear-gradient(...)" */
   thumbnailGradient?: string;
+  /** Optional pre-rendered raster preview (repo-served) of the model-backed
+   * product, shown in catalog thumbnail slots so the GLB never loads for a preview. */
+  previewImage?: string;
   /** Optional repo-served GLB model that replaces the procedural builder. */
   modelUri?: string;
   /** Static yaw offset in degrees applied to the GLB before the item rotation. */

@@ -103,9 +103,16 @@ The demo room is a **6.0 × 4.5 × 2.8 m** box in centered coordinates:
 
 `id`, `name`, `category` (15 categories), `price` (USD), meter extents
 `width/depth/height`, `styleTags`, `colors`, `material`, `stock`,
-`defaultRotation?`, `thumbnailGradient?`, and the optional GLB-backing fields
-`modelUri?` (repo-served asset under `public/models/`) and `modelYaw?` (static
-yaw offset in degrees applied before the item's own rotation). All data is
+`defaultRotation?`, `thumbnailGradient?`, `previewImage?` (pre-rendered raster
+of the GLB, repo-served under `public/previews/`, shown in catalog thumbnail
+slots so the GLB never loads just for a preview; products without one and
+session user uploads get a best-effort session-cached offscreen render from
+`components/three/modelThumbnail.ts` (GLB-backed products load their model;
+everything else renders the same procedural parts the 3D scene uses,
+keyed per colorway), falling back to the gradient tile when WebGL or
+decoding fails), and the optional GLB-backing
+fields `modelUri?` (repo-served asset under `public/models/`) and `modelYaw?`
+(static yaw offset in degrees applied before the item's own rotation). All data is
 hand-authored in `src/data/products.ts`; nothing is fetched remotely — a
 product with `modelUri` loads its bundled model on demand, with the
 procedural builder as fallback. A product's authored `colors` form its
