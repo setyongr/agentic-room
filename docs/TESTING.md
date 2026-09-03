@@ -19,7 +19,7 @@ bun run start      # serve the production build   (http://localhost:3000)
 bun run dev        # development server with HMR
 ```
 
-Expected baseline at time of writing: typecheck clean, **54 tests across 7
+Expected baseline at time of writing: typecheck clean, **66 tests across 8
 files**, production build succeeds with a single static route (`/`).
 
 ## 2. Automated suites (`src/domain/*.test.ts`)
@@ -31,6 +31,7 @@ catalog products and the seeded room — no React, no store, no WebMCP.
 | --- | --- | --- |
 | `validation.test.ts` | 5 | Out-of-bounds detection; overlap tolerance; east-window, balcony-door, and entry-door clearance blocking. Each fixture isolates exactly one issue so removing the validator fails the test. |
 | `placement.test.ts` | 13 | Locked items reject removal/replacement with `item_locked`; locked items stay movable/rotatable; failed actions never mutate caller-owned arrays; unlocked removal succeeds. Variant contract: catalog-default resolution, authored colorway storage, `invalid_variant` rejection with available-value details, variant preservation across move/rotate/lock, and keep-or-reset color on replacement. |
+| `resize.test.ts` | 12 | `resizeRoom`: supported-range enforcement (`invalid_room_size` with limits details); proportional opening rescaling per wall (grow/shrink, on-wall clamping, ceiling height caps that never re-grow), opening removal when a wall becomes too short; zone rescaling with unusable-zone drops; identical-dimension no-op preserving the input reference; input immutability; stable survivor order; sequential resizes from live dimensions. |
 | `pricing.test.ts` | 6 | Existing items contribute $0; marketplace items price at current catalog prices; signed remaining/over-budget semantics; missing catalog products never corrupt totals; replacement repricing is exact. |
 | `alternatives.test.ts` | 5 | Candidates are in-stock, strictly cheaper, same category, dimensionally compatible; savings exact; ranking deterministic (pinned order); `maxResults`/`targetPrice` respected; structured errors (`missing_instance`, `existing_instance`, `locked_instance`, `missing_product`). |
 | `appearance.test.ts` | 7 | `updateRoomAppearance`: immutable single-field updates; same-value/empty patches return the original reference; invalid wall/floor/wallpaper ids rejected in wall → floor → wallpaper order with exact `field`/`allowedValues` details. |
@@ -49,11 +50,11 @@ bun run build && bun run start   # or: bun run dev
 # open http://localhost:3000
 ```
 
-Confirm the API is present and 20 tools registered:
+Confirm the API is present and 22 tools registered:
 
 ```js
 const mc = document.modelContext ?? navigator.modelContext;
-(await mc.getTools()).map((t) => t.name); // 20 names: 9 reads + 11 mutations
+(await mc.getTools()).map((t) => t.name); // 22 names: 10 reads + 12 mutations
 ```
 
 ### 3.2 Driver
@@ -82,6 +83,11 @@ sanity signal that the call landed on the live store.
    fixed "Updated room finishes" feed entry per actual change and none for a
    repeated identical call; `save_design` → change appearance → `load_design`
    restores both appearance and item variants.
+   Room-geometry round-trips: `resize_room` to e.g. 5 × 3.5 × 2.6 →
+   `get_room_state.room.dimensions` matches and openings stay on their walls;
+   the same call again → `status: "unchanged"`; resizing narrower than a
+   seeded piece leaves the item coordinates untouched and surfaces it in
+   `validation` as `out_of_bounds`; resetting the room restores 6 × 4.5 × 2.8.
 3. **Invalid calls return helpful errors** (all `success: false`):
    - `set_budget` with `-1` → `invalid_args`
    - `place_product` with an unknown product → `missing_product`
@@ -95,6 +101,8 @@ sanity signal that the call landed on the live store.
      `availableMaterials` details
    - `set_room_appearance` with one finish id alone, or `preset` plus
      explicit ids → `invalid_args`
+   - `resize_room` with out-of-range dimensions (e.g. width 1.5 or height
+     2.2) → `invalid_room_size` with `dimensions`/`limits` details
    - State must be unchanged after each failure (no partial mutation).
 4. **Scene sync:** after an agent `place_product`, the 3D room shows the new
    piece (camera Top view helps) and the header spend figure updates.
@@ -127,6 +135,12 @@ expected numbers. Acceptance:
   switches to Edit with the new piece selected; Clear selection returns the
   rail to its catalog/empty edit guidance.
 - Camera switcher (floating in the room) cycles orbit/top/front/side.
+- Room size (Furnish rail → Room size): entering real dimensions (e.g.
+  5.4 × 3.6 × 2.7 m) and applying updates the 3D shell, the stage size pill,
+  and the footer announcement (area, removed openings, pieces left outside);
+  shrinking below a piece's extents flags it out-of-bounds in the status bar;
+  Reset to demo size restores 6 × 4.5 × 2.8 m; preset camera views keep the
+  resized room framed.
 - Budget control in the top bar opens a dialog; applying a value updates the
   header spend, status bar, and validation instantly; invalid (negative)
   values show an inline error.

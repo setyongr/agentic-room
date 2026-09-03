@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Compass, Move3d, PackageSearch, PencilRuler, X } from 'lucide-react';
+import { Compass, Move3d, PackageSearch, PencilRuler, Ruler, X } from 'lucide-react';
 import { AgentActivityFeed } from '@/components/planner/AgentActivityFeed';
 import { DesignCartPanel } from '@/components/planner/DesignCartPanel';
 import { FurnitureInspector } from '@/components/planner/FurnitureInspector';
@@ -188,6 +188,7 @@ export function PlannerShell() {
                   <Compass className="size-4 text-accent" aria-hidden="true" />
                   <span id="room-stage-heading" className="sr-only sm:not-sr-only">3D room view</span>
                 </p>
+                <RoomSizeSummary />
                 <FinishSummary appearance={roomAppearance} />
               </div>
               <div className="pointer-events-auto">
@@ -220,6 +221,40 @@ export function PlannerShell() {
         {activeDrawer === 'designs' ? <DesignCartPanel view="designs" /> : null}
       </WorkspaceDrawer>
     </main>
+  );
+}
+
+/** Compact meter formatting for dimension readouts. */
+function formatMeters(value: number): string {
+  return Number(value.toFixed(2)).toString();
+}
+
+/**
+ * Live room-size pill for the stage overlay: the real measured shell
+ * (width × depth × height and floor area), always visible so the editor
+ * reads in true meters.
+ */
+function RoomSizeSummary() {
+  const dimensions = useRoomStore((state) => state.room.dimensions);
+  const width = formatMeters(dimensions.width);
+  const depth = formatMeters(dimensions.depth);
+  const height = formatMeters(dimensions.height);
+  const area = formatMeters(dimensions.width * dimensions.depth);
+  return (
+    <p
+      className="mt-2 flex items-center"
+      aria-label={`Room size: ${width} by ${depth} meters, ${height} meter ceiling, ${area} square meters`}
+    >
+      <span className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface-muted/80 px-2 py-1 text-[11px] font-semibold tracking-wide text-text-muted uppercase">
+        <Ruler className="size-3.5 text-accent" aria-hidden="true" />
+        <span className="tabular-nums normal-case sm:hidden">
+          {width} × {depth} m
+        </span>
+        <span className="hidden tabular-nums normal-case sm:inline">
+          {width} × {depth} × {height} m · {area} m²
+        </span>
+      </span>
+    </p>
   );
 }
 

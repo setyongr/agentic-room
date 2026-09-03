@@ -11,7 +11,7 @@ adds lifecycle, envelope, error, and boundary detail.
 ## 1. Overview
 
 The page is its own MCP server — no binary, daemon, or backend. It registers
-**21 tools** (10 reads, 11 mutations) against Chrome's in-browser Model
+**22 tools** (10 reads, 12 mutations) against Chrome's in-browser Model
 Context API. The human UI and the tools drive the same Zustand store; a tool
 call is indistinguishable from a click except for `origin: 'agent'`, which is
 what makes the completed action visible in the activity feed.
@@ -24,7 +24,7 @@ Implementation files:
 | `src/webmcp/registerTools.ts` | `registerRoomTools()` — detection, registration, unregistration, dev-only warnings. |
 | `src/webmcp/serialize.ts` | Result envelope helpers, input readers (string/number/object/array), per-tool parsing. |
 | `src/webmcp/tools/readTools.ts` | The 10 read tools. |
-| `src/webmcp/tools/mutationTools.ts` | The 11 mutation tools. |
+| `src/webmcp/tools/mutationTools.ts` | The 12 mutation tools. |
 
 ## 2. Availability and registration lifecycle
 
@@ -85,7 +85,7 @@ Every tool result is a JSON object with a `success` discriminant:
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
-| `get_room_state` | Room dimensions/openings, room appearance (wall/floor/wallpaper ids), every placed item (id, name, category, extents, position, rotation, locked, source, budget price, color/material variant), budget, live pricing, live validation, last saved design name | — |
+| `get_room_state` | Room dimensions/openings (plus supported resize ranges), room appearance (wall/floor/wallpaper ids), every placed item (id, name, category, extents, position, rotation, locked, source, budget price, color/material variant), budget, live pricing, live validation, last saved design name | — |
 | `get_available_placement_zones` | Zones accepting `category` with capacity left: footprints, occupancy, remaining | `category` (enum) |
 | `search_products` | Deterministic catalog search: free-text + category/style/color/material/price filters, dimension window (`maxWidth`/`maxDepth`), sort, paging | `query`, `category`, `styles`, `colors`, `materials`, `minPrice`, `maxPrice`, `inStockOnly`, `sort`, `maxWidth`, `maxDepth`, `page`, `pageSize` |
 | `get_product` | Full catalog record for one product + compatible placement zones (`{id,name,kind}[]`) + its placed instances | `productId` |
@@ -102,7 +102,7 @@ calls still append *completion* entries ("Inspected the room: …",
 feed because the feed observes agent activity, not state changes — those
 templates never contain query text or other free-form content.
 
-## 5. Mutation tools (11) — same store actions as the UI, `origin: 'agent'`
+## 5. Mutation tools (12) — same store actions as the UI, `origin: 'agent'`
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
@@ -113,6 +113,7 @@ templates never contain query text or other free-form content.
 | `set_item_locked` | Lock/unlock; locked rejects remove/replace but allows move/rotate. Setting the current value is a success no-op | `instanceId`, `locked` |
 | `set_budget` | Budget ≥ 0; refreshes the budget validation + pricing immediately | `budget` |
 | `set_room_appearance` | Style the room (visual only; pricing/layout untouched). Either `preset: "default"` or all three explicit finish ids; mixed/partial inputs fail with `invalid_args`. Returns the resolved appearance + layout | `preset` **or** `wallFinishId` + `floorFinishId` + `wallpaperId` |
+| `resize_room` | Resize the room shell to real measured dimensions. All of `width`/`depth`/`height` in meters within the supported ranges (`get_room_state` → `room.resizeLimits`; out-of-range fails with `invalid_room_size`). Openings keep their walls (scaled proportionally, clamped on-wall; openings whose wall became too short are removed and reported) and placement zones rebuild with the room. Furniture never moves — pieces left outside the new walls surface as layout errors. Returns `status` (`resized`/`unchanged`), `dimensions`, `floorAreaM2`, `removedOpeningIds` + refreshed pricing/layout | `width`, `depth`, `height` |
 | `replace_product` | Swap the product behind an item: same category, in stock, unlocked. Preserves `instanceId`/position/rotation/source; keeps the current color when the replacement offers it, else resets to the replacement's first color, always with the replacement's material. Returns `savings` (negative when pricier) + refreshed layout/pricing | `instanceId`, `replacementProductId` |
 | `save_design` | Capture the live design (room, items with variants, room appearance) as a named snapshot; returns the design summary incl. appearance. Fails with `user_models_not_savable` while session-uploaded models are placed (uploads are never stored) | `name`, `thumbnailGradient?` |
 | `load_design` | Restore a session design incl. room appearance and item variants (destructive: current design is discarded; unknown id → `design_not_found`); restored block includes appearance | `designId` |
@@ -144,6 +145,7 @@ unchanged. Codes exercised by the test suite and demo workflows:
 | `cart_add_rejected` | Some requested instances could not be added (details list the rejections). |
 | `invalid_variant` | Place/replace requested a color not offered by the product or a mismatched material (details: `requestedVariant`, `availableColors`, `availableMaterials`). |
 | `invalid_room_appearance` | Appearance update referenced an unknown finish/wallpaper id (details: `field`, `value`, `allowedValues`). |
+| `invalid_room_size` | Room resize requested dimensions outside the supported ranges (details: `dimensions`, `limits`). |
 | `user_models_not_savable` | `save_design` while session-uploaded models are placed (uploads are never stored; details: `userModelIds`). |
 | `user_model_not_found` | User-model action referenced an id that is no longer placed. |
 | `invalid_rotation` | Uploaded-model rotation is not a finite number of degrees. |
@@ -181,7 +183,7 @@ bun install
 bun run dev              # http://localhost:3000
 # DevTools console → confirm availability, then:
 const mc = document.modelContext ?? navigator.modelContext;
-await mc.getTools();     // expect 20 registered names
+await mc.getTools();     // expect 22 registered names
 ```
 
 Then run the driver snippet from README ("Testing the WebMCP integration in

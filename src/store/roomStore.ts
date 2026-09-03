@@ -45,6 +45,7 @@ import type {
   PriceSummary,
   RoomAppearance,
   RoomData,
+  RoomDimensions,
   SearchProductsArgs,
   SearchProductsResult,
   SerializableResult,
@@ -59,6 +60,7 @@ import * as catalog from '@/domain/catalog';
 import * as designs from '@/domain/designs';
 import * as placement from '@/domain/placement';
 import * as pricing from '@/domain/pricing';
+import * as roomResize from '@/domain/resize';
 import * as validation from '@/domain/validation';
 
 /** Who initiated an action: the interactive UI ('human') or a WebMCP agent call. */
@@ -290,6 +292,17 @@ export interface RoomStore {
   ) => SerializableResult<placement.ReplaceProductResult>;
   /** Set the design budget; refreshes validation (budget check) and pricing. */
   setBudget: (budget: number, origin?: ActionOrigin) => SerializableResult<{ budget: number }>;
+  /**
+   * Resize the room shell to real measured dimensions (meters, within the
+   * domain's supported ranges). Openings and placement zones are rebuilt
+   * from the new footprint; furniture keeps its coordinates and the layout
+   * is re-validated immediately, so pieces outside the new walls surface as
+   * out-of-bounds errors. Same dimensions = no-op success.
+   */
+  setRoomDimensions: (
+    dimensions: RoomDimensions,
+    origin?: ActionOrigin,
+  ) => SerializableResult<roomResize.ResizeRoomResult>;
   /** Apply a partial styling change to the room appearance (visual only; never touches pricing or layout). */
   setRoomAppearance: (
     patch: Partial<RoomAppearance>,
@@ -779,6 +792,27 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
         amount: budget,
       });
       return { ok: true, data: { budget } };
+    },
+
+    setRoomDimensions: (dimensions, origin = 'human') => {
+      const prev = get();
+      const result = roomResize.resizeRoom(prev.room, dimensions);
+      if (!result.ok) return result;
+      if (!result.data.changed) return result; // no-op success: nothing changed
+      const resized = result.data.room;
+      const { width, depth, height } = resized.dimensions;
+      const removed = result.data.removedOpeningIds;
+      const note =
+        removed.length === 0
+          ? ''
+          : removed.length === 1
+            ? `; the ${removed[0]} opening no longer fits a wall and was removed`
+            : `; ${removed.length} openings no longer fit the walls and were removed`;
+      commit(prev, refreshDesign(resized, prev.furniture, prev.budget), origin, {
+        type: 'room_resized',
+        message: `Resized the room to ${fmt(width)} × ${fmt(depth)} × ${fmt(height)} m${note}`,
+      });
+      return result;
     },
 
     setRoomAppearance: (patch, origin = 'human') => {

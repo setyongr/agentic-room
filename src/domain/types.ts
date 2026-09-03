@@ -161,6 +161,7 @@ export const ACTIVITY_TYPES = [
   'checkout_completed',
   'budget_updated',
   'room_appearance_updated',
+  'room_resized',
 ] as const;
 
 /** Kind of an activity feed entry. */
@@ -319,7 +320,12 @@ export interface PlacementZone {
   hint?: string;
 }
 
-/** Static geometry of the room, shared by the editor, validation, and snapshots. */
+/**
+ * The room's current geometry, shared by the editor, validation, and
+ * snapshots. The demo room ships as 6 × 4.5 × 2.8 m but the dimensions are
+ * live state: resizing rebuilds the openings and placement zones from the
+ * new footprint (see `src/domain/resize.ts`).
+ */
 export interface RoomData {
   dimensions: RoomDimensions;
   /** wall openings (doors, windows) */

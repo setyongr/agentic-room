@@ -7,6 +7,7 @@ import {
   ChevronDown,
   PackageOpen,
   Plus,
+  Ruler,
   Search,
   SlidersHorizontal,
   Sofa,
@@ -18,6 +19,7 @@ import { categories, colors, styles } from '@/data/products';
 import type { FurnitureProduct, SearchFilters } from '@/domain/types';
 import { useRoomStore } from '@/store/roomStore';
 import { RoomAppearancePanel } from '@/components/marketplace/RoomAppearancePanel';
+import { RoomSizePanel } from '@/components/marketplace/RoomSizePanel';
 import { prepareUserGlb, revokePreparedGlb } from '@/components/marketplace/glbUpload';
 
 const PAGE_SIZE = 12;
@@ -29,7 +31,18 @@ const CURRENCY = new Intl.NumberFormat('en-US', {
 
 type Feedback = { kind: 'success' | 'error'; message: string } | null;
 
-type FurnishTab = 'furniture' | 'finishes';
+type FurnishTab = 'furniture' | 'room' | 'finishes';
+
+/** Furnish rail segments: catalog, real-size room geometry, room finishes. */
+const FURNISH_SEGMENTS: readonly {
+  id: FurnishTab;
+  label: string;
+  icon: typeof Sofa;
+}[] = [
+  { id: 'furniture', label: 'Furniture', icon: Sofa },
+  { id: 'room', label: 'Room size', icon: Ruler },
+  { id: 'finishes', label: 'Finishes', icon: SwatchBook },
+];
 
 const CATEGORY_LABELS: Record<string, string> = {
   sofa: 'Sofas',
@@ -230,28 +243,20 @@ export function MarketplacePanel() {
         </div>
 
         <div className="mt-3 flex rounded-control bg-surface-muted p-1" role="group" aria-label="Furnish tool">
-          <button
-            type="button"
-            aria-pressed={furnishTab === 'furniture'}
-            onClick={() => setFurnishTab('furniture')}
-            className={`inline-flex min-h-11 w-1/2 items-center justify-center gap-1.5 rounded-control px-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
-              furnishTab === 'furniture' ? 'bg-surface text-text shadow-card' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            <Sofa className="size-4" aria-hidden="true" />
-            Furniture
-          </button>
-          <button
-            type="button"
-            aria-pressed={furnishTab === 'finishes'}
-            onClick={() => setFurnishTab('finishes')}
-            className={`inline-flex min-h-11 w-1/2 items-center justify-center gap-1.5 rounded-control px-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
-              furnishTab === 'finishes' ? 'bg-surface text-text shadow-card' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            <SwatchBook className="size-4" aria-hidden="true" />
-            Room finishes
-          </button>
+          {FURNISH_SEGMENTS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={furnishTab === id}
+              onClick={() => setFurnishTab(id)}
+              className={`inline-flex min-h-11 w-1/3 min-w-0 items-center justify-center gap-1 rounded-control px-1 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
+                furnishTab === id ? 'bg-surface text-text shadow-card' : 'text-text-muted hover:text-text'
+              }`}
+            >
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">{label}</span>
+            </button>
+          ))}
         </div>
 
         {furnishTab === 'furniture' ? (
@@ -357,6 +362,8 @@ export function MarketplacePanel() {
 
       {furnishTab === 'finishes' ? (
         <RoomAppearancePanel />
+      ) : furnishTab === 'room' ? (
+        <RoomSizePanel />
       ) : (
         <>
           {feedback ? (

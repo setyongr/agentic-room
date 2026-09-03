@@ -56,6 +56,8 @@ export function RoomScene() {
     selectUserModel(null);
   }, [selectItem, selectUserModel]);
   const backgroundRef = useRef<THREE.Mesh>(null);
+  // Shadow capture must cover the whole (resizable) room shell.
+  const shadowHalf = Math.max(room.dimensions.width, room.dimensions.depth) / 2 + 1.5;
 
   const handleBackgroundPointerDown = useCallback(
     (event: ThreeEvent<PointerEvent>) => {
@@ -82,10 +84,10 @@ export function RoomScene() {
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={1}
         shadow-camera-far={20}
-        shadow-camera-left={-7}
-        shadow-camera-right={7}
-        shadow-camera-top={7}
-        shadow-camera-bottom={-7}
+        shadow-camera-left={-shadowHalf}
+        shadow-camera-right={shadowHalf}
+        shadow-camera-top={shadowHalf}
+        shadow-camera-bottom={-shadowHalf}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
       />
@@ -134,7 +136,7 @@ export function RoomScene() {
       <ContactShadows
         key={lastMutation}
         position={[0, 0.002, 0]}
-        scale={7.2}
+        scale={Math.max(room.dimensions.width, room.dimensions.depth) + 2.4}
         resolution={512}
         blur={2.2}
         far={4}

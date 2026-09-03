@@ -6,6 +6,7 @@ import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import type { CameraMode } from '@/domain/types';
+import { useRoomStore } from '@/store/roomStore';
 
 /** Radians per degree; every preset angle below is authored in degrees. */
 const DEG = Math.PI / 180;
@@ -19,6 +20,20 @@ const FLIGHT_DURATION = 0.7;
  * transition arc clear of the room shell.
  */
 const SAFE_FLIGHT_RADIUS = 5.2;
+
+/** Half-diagonal of the demo room's floor (6 × 4.5 m), the framing reference. */
+const DEMO_ROOM_HALF_DIAGONAL = Math.hypot(6, 4.5) / 2;
+
+/**
+ * Framing multiplier for the camera presets, derived from the live room
+ * dimensions: 1× for the demo room, never below 0.85× (small rooms stay
+ * close enough to read) and never above 1.9× (large rooms are never
+ * cropped by a preset view).
+ */
+export function roomFramingScale(width: number, depth: number): number {
+  const halfDiagonal = Math.hypot(width, depth) / 2;
+  return Math.min(1.9, Math.max(0.85, halfDiagonal / DEMO_ROOM_HALF_DIAGONAL));
+}
 
 /**
  * One camera view mode: an orbit target plus the spherical preset the
@@ -182,12 +197,18 @@ function snapToPreset(
 export function CameraController({ mode }: { mode: CameraMode }) {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
   const size = useThree((state) => state.size);
+  const roomWidth = useRoomStore((state) => state.room.dimensions.width);
+  const roomDepth = useRoomStore((state) => state.room.dimensions.depth);
   const preset = useMemo(() => {
     const base = PRESETS[mode];
     // Keep the room in frame when the stage is narrower than it is tall.
     const scale = Math.max(1, size.height / Math.max(size.width, 1));
-    return { ...base, radius: base.radius * scale, maxDistance: base.maxDistance * scale };
-  }, [mode, size.width, size.height]);
+    return {
+      ...base,
+      radius: base.radius * scale * roomFramingScale(roomWidth, roomDepth),
+      maxDistance: base.maxDistance * scale * roomFramingScale(roomWidth, roomDepth),
+    };
+  }, [mode, size.width, size.height, roomWidth, roomDepth]);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
 
   // Scratch objects reused by the flight loop: no per-frame allocation.
@@ -232,7 +253,10 @@ export function CameraController({ mode }: { mode: CameraMode }) {
     flight.active = true;
     flight.elapsed = 0;
     flight.duration = reduceMotion ? 0 : FLIGHT_DURATION;
-    flight.startRadius = Math.max(scratchSpherical.radius, SAFE_FLIGHT_RADIUS);
+    flight.startRadius = Math.max(
+      scratchSpherical.radius,
+      SAFE_FLIGHT_RADIUS * roomFramingScale(roomWidth, roomDepth),
+    );
     flight.startPhi = scratchSpherical.phi;
     flight.startTheta = startTheta;
     flight.endRadius = preset.radius;

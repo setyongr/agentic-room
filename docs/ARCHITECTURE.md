@@ -57,6 +57,7 @@ src/
                         snapshots, cart, activity; enums and constants
     catalog.ts          Product lookup + deterministic search/sort/paging
     placement.ts        Zone placement, move/rotate/remove/replace rules
+    resize.ts           Room-shell resizing: dimension limits, opening and zone rescaling
     validation.ts       Layout/budget/stock/catalog validation (issue list)
     pricing.ts          Marketplace-only budget math + budget pressure
     alternatives.ts     Cheaper-compatible-alternative ranking
@@ -64,7 +65,7 @@ src/
     appearance.ts       Room appearance updates (visual-only styling state)
     cart.ts             Marketplace-only cart rules
     activity.ts         Activity feed model: types, templates, bounds
-    *.test.ts           Colocated Vitest suites (7 files, 54 tests)
+    *.test.ts           Colocated Vitest suites (8 files, 66 tests)
   store/
     roomStore.ts        The Zustand store: state, actions, commit pipeline
     selectors.ts        Stable derived selectors (selected item, totals, …)
@@ -75,7 +76,7 @@ src/
     sceneSnapshot.ts    On-demand JPEG capture of the live 3D canvas
                         (backs the render_scene_snapshot read tool)
     tools/readTools.ts      10 read tools (incl. render_scene_snapshot)
-    tools/mutationTools.ts  11 mutation tools
+    tools/mutationTools.ts  12 mutation tools
 ```
 
 ## 3. Data model (`src/domain/types.ts`)
@@ -86,7 +87,7 @@ The demo room is a **6.0 × 4.5 × 2.8 m** box in centered coordinates:
 `x ∈ [-3, 3]`, `z ∈ [-2.25, 2.25]`, north wall at `z = -2.25`, south wall at
 `z = +2.25`. `RoomData` carries:
 
-- `dimensions` — width/depth/height in meters.
+- `dimensions` — width/depth/height in meters; **live state**, resized to real measurements via `src/domain/resize.ts` (`resizeRoom`, ranges 2–10 × 2–10 m floor, 2.4–4 m ceiling). Openings scale proportionally along their own wall (clamped on-wall; dropped and reported when a wall becomes too short; tops capped below the ceiling), zones rescale with the room (unusable ones drop), and furniture is never moved — pieces left outside the new walls re-validate as errors.
 - `openings` — three wall openings with x/z-centered rectangular footprints:
   - `entry-door` (west wall, `z` around −1),
   - `east-window` (east wall; a window with `sillHeight`),
@@ -161,7 +162,7 @@ warnings inform but do not invalidate.
 
 | field | notes |
 | --- | --- |
-| `room` | static geometry (from `data/`) |
+| `room` | live geometry (from `data/`); dimensions are resizable through `setRoomDimensions`, which rebuilds openings and placement zones |
 | `roomAppearance` | current styling (wall/floor/wallpaper ids); visual only — never feed-logged amounts |
 | `furniture` | readonly array; every write replaces it (never mutated in place) |
 | `budget` | number ≥ 0 |
@@ -182,8 +183,9 @@ warnings inform but do not invalidate.
 - **Mutations:** `placeProduct` (with optional color/material variant),
   `moveProduct`, `rotateProduct`, `removeProduct`, `setItemLocked`,
   `replaceProduct`, `setBudget`, `setRoomAppearance` (partial visual patch),
-  `saveDesign`, `loadDesign`, `resetToDefault`, `loadBudgetRescue`,
-  `addToCart`.
+  `setRoomDimensions` (resize to real meters; rebuilds openings/zones, never
+  moves furniture), `saveDesign`, `loadDesign`, `resetToDefault`,
+  `loadBudgetRescue`, `addToCart`.
 
 Every mutation follows the same pipeline:
 
@@ -219,6 +221,7 @@ read tools log *that a read happened*, never the query text.
 | --- | --- |
 | `catalog.ts` | Product lookup; `searchProducts` with free-text + category/style/color/material/price filters, dimension windows, deterministic sort, paging; stock awareness. |
 | `placement.ts` | Zone discovery for a category, zone fit preview, zone placement (centers item in zone footprint, enforces category/capacity/bounds), explicit x/z placement, move/rotate/remove/replace with lock rules, variant resolution/validation (`invalid_variant`) with keep-or-reset color on replacement. |
+| `resize.ts` | Room resizing within supported ranges (`invalid_room_size`): proportional opening rescale per wall (clamped, ceiling-capped, removed when a wall is too short) and zone rescaling with unusable-zone drops; furniture untouched. |
 | `validation.ts` | Runs the issue checks from §3 in fixed order against room, furniture, and budget. |
 | `pricing.ts` | Marketplace-only totals (`newTotal` vs existing/grand), signed remaining, `getBudgetPressure` (under/at/over status + replaceable items most-expensive-first). |
 | `alternatives.ts` | For one placed marketplace item: cheaper same-category in-stock candidates ranked by style/color/material/dimension compatibility then savings; `totalSavings`. |
@@ -255,14 +258,21 @@ mounts exactly once inside the shell.
 
 ### Panels
 
-- **MarketplacePanel** — sidebar content with a Furniture / Room finishes
-  switch. Furniture: search, category select, one `Filters` disclosure
+- **MarketplacePanel** — sidebar content segmented into Furniture, Room size
+  (`RoomSizePanel`), and Finishes (`RoomAppearancePanel`). Furniture: search,
+  category select, one `Filters` disclosure
   (style/color/price), retail product cards (thumbnail, category, name,
   price, dimensions, material, stock, all colorway chips, compatible
   placement zones, expandable details) whose "Place" action places the
-  chosen colorway, pagination, empty state. Room finishes: three radio-card
+  chosen colorway, pagination, empty state. Finishes: three radio-card
   groups (wall/floor/wallpaper) calling `setRoomAppearance` directly with a
-  live status region. It owns its scroll only when mounted in the rail.
+  live status region. Each surface owns its scroll only when mounted in the rail.
+- **RoomSizePanel** — real-size room shell editor: width/depth/height in
+  meters within the domain ranges (see `resize.ts`), live floor area readout,
+  and a reset to the demo size. Applies through `setRoomDimensions` and
+  announces removed openings and pieces left outside the new walls. The stage
+  overlay shows the live dimensions pill (`RoomSizeSummary`) with the finish
+  chips.
 - **FurnitureInspector** — placed-items list + selected-piece editor
   (position form, rotation steps, lock/unlock, remove, per-item validation
   issues) in a single internal scroll region; the polite status footer stays
@@ -338,7 +348,10 @@ Components never hard-code hex values.
   **without per-frame allocations**. Flat rings mark selection and invalid
   placement; pointer events bubble to select the instance.
 - `CameraController` — orbit/top/front/side presets; constrained so users
-  cannot get lost below the floor or far outside the room.
+  cannot get lost below the floor or far outside the room. Preset radii and
+  the flight envelope scale with the live room dimensions (`roomFramingScale`),
+  so resized rooms stay framed; `render_scene_snapshot` presets apply the same
+  framing.
 - `RoomScene` — subscribes to room/furniture/validation/selection and
   assembles architecture + meshes.
 
@@ -350,8 +363,8 @@ keyboard-accessible control outside the canvas.
 
 See `docs/WEBMCP.md` for the full protocol spec. In brief: `WebMcpProvider`
 calls `registerRoomTools()` in an effect, feature-detects
-`document.modelContext ?? navigator.modelContext`, registers 21 tools (10
-reads, 11 mutations — including `set_room_appearance` and
+`document.modelContext ?? navigator.modelContext`, registers 22 tools (10
+reads, 12 mutations — including `resize_room` and
 `render_scene_snapshot`) with JSON schemas and
 safety annotations, and unregisters on cleanup (Strict Mode safe). Tools call
 the same store actions as the UI with `origin: 'agent'` and return

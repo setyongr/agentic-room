@@ -13,6 +13,7 @@
 
 import { captureSceneSnapshot } from '@/webmcp/sceneSnapshot';
 import { MAX_PAGE_SIZE } from '@/domain/catalog';
+import { ROOM_SIZE_LIMITS } from '@/domain/resize';
 import * as pricing from '@/domain/pricing';
 import type {
   FurnitureProduct,
@@ -198,6 +199,7 @@ function getRoomStateTool(): ModelContextTool {
             depth: state.room.dimensions.depth,
             height: state.room.dimensions.height,
           },
+          resizeLimits: ROOM_SIZE_LIMITS,
           openings: state.room.openings.map((opening) => ({
             id: opening.id,
             kind: opening.kind,

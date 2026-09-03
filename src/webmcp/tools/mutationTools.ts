@@ -18,6 +18,7 @@
  */
 
 import * as pricing from '@/domain/pricing';
+import { ROOM_SIZE_LIMITS } from '@/domain/resize';
 import type { FurnitureProduct, PlacedFurniture, SerializableError } from '@/domain/types';
 import { FLOOR_FINISH_IDS, WALL_FINISH_IDS, WALLPAPER_IDS } from '@/domain/types';
 import { DEFAULT_ROOM_APPEARANCE } from '@/data/appearance';
@@ -405,6 +406,64 @@ function setBudgetTool(): ModelContextTool {
   );
 }
 
+/** Resize the room shell to real measured dimensions. */
+function resizeRoomTool(): ModelContextTool {
+  const { width, depth, height } = ROOM_SIZE_LIMITS;
+  return mutationTool(
+    'resize_room',
+"Resize the room to real measured dimensions: width, depth, and height in meters (supported ranges: see get_room_state room.resizeLimits). Openings stay on their walls and placement zones rebuild with the room; an opening whose wall became too short is removed and reported. Furniture is never moved - pieces left outside the new walls become out-of-bounds layout errors. Returns the new dimensions, floor area in m2, removed opening ids, pricing, and layout validity.",
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const widthArg = readRequiredNumber(args.value, 'width');
+      const depthArg = readRequiredNumber(args.value, 'depth');
+      const heightArg = readRequiredNumber(args.value, 'height');
+      if (!widthArg.ok) return toolFail(widthArg.code, widthArg.message);
+      if (!depthArg.ok) return toolFail(depthArg.code, depthArg.message);
+      if (!heightArg.ok) return toolFail(heightArg.code, heightArg.message);
+      const state = useRoomStore.getState();
+      const result = state.setRoomDimensions(
+        { width: widthArg.value, depth: depthArg.value, height: heightArg.value },
+        'agent',
+      );
+      if (!result.ok) return resultFail(result);
+      const fresh = useRoomStore.getState();
+      const resized = result.data.room.dimensions;
+      return toolOk({
+        status: result.data.changed ? 'resized' : 'unchanged',
+        dimensions: {
+          width: resized.width,
+          depth: resized.depth,
+          height: resized.height,
+        },
+        floorAreaM2: resized.width * resized.depth,
+        removedOpeningIds: [...result.data.removedOpeningIds],
+        pricing: pricingBlock(fresh),
+        layout: layoutBlock(fresh),
+      });
+    },
+    {
+      type: 'object',
+      properties: {
+        width: {
+          type: 'number',
+          description: `Room width along x in meters (${width.min}-${width.max}).`,
+        },
+        depth: {
+          type: 'number',
+          description: `Room depth along z in meters (${depth.min}-${depth.max}).`,
+        },
+        height: {
+          type: 'number',
+          description: `Wall height in meters (${height.min}-${height.max}).`,
+        },
+      },
+      required: ['width', 'depth', 'height'],
+      additionalProperties: false,
+    },
+  );
+}
+
 /** Replace the product backing a placed item. */
 function replaceProductTool(): ModelContextTool {
   return mutationTool(
@@ -713,6 +772,7 @@ export function createMutationTools(): readonly ModelContextTool[] {
     setItemLockedTool(),
     setBudgetTool(),
     setRoomAppearanceTool(),
+    resizeRoomTool(),
     replaceProductTool(),
     saveDesignTool(),
     loadDesignTool(),

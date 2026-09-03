@@ -15,8 +15,9 @@
  * downscaled to a token-friendly width.
  */
 import * as THREE from 'three';
-import { PRESETS } from '@/components/three/CameraController';
+import { PRESETS, roomFramingScale } from '@/components/three/CameraController';
 import type { CameraMode } from '@/domain/types';
+import { useRoomStore } from '@/store/roomStore';
 
 /** Camera modes accepted by the snapshot tool; `live` = current editor view. */
 export type SnapshotView = 'live' | CameraMode;
@@ -100,9 +101,10 @@ export async function captureSceneSnapshot(options: SnapshotOptions): Promise<Sn
   let tempCamera: THREE.PerspectiveCamera | null = null;
   if (options.view !== 'live') {
     const preset = PRESETS[options.view];
-    // Same aspect-based radius framing the CameraController applies.
+    // Same aspect- and room-size-based radius framing the CameraController applies.
+    const { width, depth } = useRoomStore.getState().room.dimensions;
     const scale = Math.max(1, handle.height / Math.max(handle.width, 1));
-    const radius = preset.radius * scale;
+    const radius = preset.radius * scale * roomFramingScale(width, depth);
     tempCamera = new THREE.PerspectiveCamera(preset.fov, aspect, 0.1, 80);
     const offset = new THREE.Vector3().setFromSphericalCoords(
       radius,

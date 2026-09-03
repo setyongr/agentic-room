@@ -15,7 +15,7 @@ Context API as a **shared, verifiable handoff between a web app and an
 agent**:
 
 - **No server-side MCP host needed.** The page is its own MCP server: it
-  registers 21 tools (10 reads, 11 mutations) with JSON schemas and safety
+  registers 22 tools (10 reads, 12 mutations) with JSON schemas and safety
   annotations against Chrome's in-browser Model Context API. There is no
   `webmcp` binary, no WebSocket daemon, no API key, and nothing to deploy
   besides the page itself.
@@ -51,7 +51,7 @@ agent**:
                     │        ▲                            ▲        │
                     │        │ same actions               │         │
                     │        │ origin: 'agent'            │         │
-  Chrome Model ─────┤  WebMcpProvider ── 21 tools ────────┘         │
+  Chrome Model ─────┤  WebMcpProvider ── 22 tools ────────┘         │
   Context API       │  (registerRoomTools)                          │
   (assistant /      │  document.modelContext.registerTool(...)      │
   console script)   └──────────────────────────────────────────────┘
@@ -60,7 +60,7 @@ agent**:
 - **Registration.** `WebMcpProvider` (mounted once inside `PlannerShell`)
   calls `registerRoomTools()` in a client effect. It feature-detects
   `document.modelContext` (and `navigator.modelContext` on experimental
-  builds), then registers the 21 tools sequentially, honoring an
+  builds), then registers the 22 tools sequentially, honoring an
   `AbortController` signal whose abort unregisters them — which makes the
   effect safe under React Strict Mode's mount → cleanup → mount cycle.
   Unsupported browsers get a no-op cleanup: the planner works, tools just
@@ -114,7 +114,7 @@ agent**:
   through WebMCP. Agent-only helpers add structured zone, pressure, and
   alternative analysis.
 
-## The tool surface — 21 tools
+## The tool surface — 22 tools
 
 All results are JSON strings: `{success:true, ...}` or
 `{success:false, error, code, ...details}`. Argument names match the JSON
@@ -124,7 +124,7 @@ schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
-| `get_room_state` | Full snapshot: room dimensions, openings, room appearance (wall/floor/wallpaper), every placed item (id, name, category, dimensions, position, rotation, lock, source, budget price, color/material variant), budget, live pricing, validation issues, last saved design name | — |
+| `get_room_state` | Full snapshot: room dimensions (+ supported resize ranges), openings, room appearance (wall/floor/wallpaper), every placed item (id, name, category, dimensions, position, rotation, lock, source, budget price, color/material variant), budget, live pricing, validation issues, last saved design name | — |
 | `get_available_placement_zones` | Zones that accept a category and still have capacity, with occupancy and remaining slots | `category` (enum) |
 | `search_products` | Catalog search with filters, dimension window, deterministic sort and paging | `query`, `category`, `styles`, `colors`, `materials`, `minPrice`, `maxPrice`, `inStockOnly`, `sort`, `maxWidth`, `maxDepth`, `page`, `pageSize` |
 | `get_product` | One product's full catalog details, its compatible placement zones, plus its placed instances | `productId` |
@@ -135,7 +135,7 @@ schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 | `get_saved_designs` | Designs saved this session, newest first, with budget, item count, marketplace total, and room appearance at save time | — |
 | `render_scene_snapshot` | Render the live 3D room to a JPEG data URL so an agent can judge the visual result: `view` = `live` or the standard `orbit`/`top`/`front`/`side` overviews (user camera untouched); downscaled to `maxWidth`; canvas only, never UI text | `view?`, `maxWidth?` |
 
-### Mutations (11) — same store actions as the UI, `origin: 'agent'`
+### Mutations (12) — same store actions as the UI, `origin: 'agent'`
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
@@ -147,6 +147,7 @@ schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 | `set_budget` | Set the design budget (≥ 0); only marketplace items count against it; budget check refreshes immediately | `budget` |
 | `replace_product` | Swap the product backing an item (same category, in stock, unlocked); keeps instance id, position, rotation, source, and the color when the replacement offers it; returns the price `savings` (negative when pricier) | `instanceId`, `replacementProductId` |
 | `set_room_appearance` | Style the room: all three finish ids or `preset: "default"`; visual only, never affects pricing or layout | `wallFinishId`, `floorFinishId`, `wallpaperId` **or** `preset` |
+| `resize_room` | Resize the room to real measured dimensions (width/depth/height in meters, ranges in `get_room_state` → `room.resizeLimits`); openings stay on their walls (scaled proportionally, removed and reported when a wall becomes too short) and placement zones rebuild with the room; furniture is never moved — out-of-bounds pieces surface as layout errors. Returns `status`, `dimensions`, `floorAreaM2`, `removedOpeningIds` plus refreshed pricing and layout | `width`, `depth`, `height` |
 | `save_design` | Capture the live design (room, items with variants, appearance) as a named snapshot | `name`, `thumbnailGradient?` |
 | `load_design` | Restore a session snapshot, including room appearance and item variants (destructive: current design is discarded; unknown ids fail with `design_not_found`) | `designId` |
 | `add_to_cart` | Add placed marketplace items to the cart at catalog prices; all-or-nothing (unknown, existing, or already-carted instances reject the whole request) | `instanceIds` (array) |
@@ -176,7 +177,7 @@ Other commands:
 
 ```bash
 bun run check      # typecheck (tsc --noEmit)
-bun run test       # run the test suite (vitest) — 54 tests, 7 files
+bun run test       # run the test suite (vitest) — 66 tests, 8 files
 bun run build      # production build
 bun run start      # serve the production build
 ```
@@ -300,7 +301,7 @@ its dollar amount.
 bun run test
 ```
 
-54 tests across 7 pure-domain suites (`src/domain/*.test.ts`), run with
+66 tests across 8 pure-domain suites (`src/domain/*.test.ts`), run with
 Vitest under jsdom:
 
 | Suite | Tests | Covers |
