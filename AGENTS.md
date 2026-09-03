@@ -20,31 +20,6 @@ before touching anything structural.
 - Do not commit credentials, `.env` files, generated builds, local tool state,
   or temporary screenshots. Keep source assets and license notices tracked.
 
-## Hackathon submission boundary
-
-This project is being prepared for [The WebMCP Challenge](https://webmcp.devpost.com/).
-Event notes were checked September 3, 2026; consult the
-[official rules](https://webmcp.devpost.com/rules) and
-[organizer updates](https://webmcp.devpost.com/updates) before submission.
-
-- Deadline: September 3, 2026 at 13:00 PDT / September 4 at 03:00 WIB.
-- Prepare a working live URL, public repository with detectable open-source
-  license, public YouTube demo under three minutes with audio, and an English
-  description of WebMCP's fit, implementation, and human–agent collaboration
-  (or English translations). Record the actual browser/client tested.
-- Preserve dated history. If the project predates August 25, distinguish
-  pre-existing work from WebMCP work added during the submission period.
-- At the deadline, freeze the submitted repo, video, and deployed site as
-  instructed by the organizers. Keep the live app working through judging
-  (ends September 21 at 17:00 PDT / September 22 at 07:00 WIB). After the
-  deadline, do not modify submitted materials; ask the user to identify a
-  separate development fork before making changes. Follow official guidance
-  on when the freeze ends.
-- Repository publication and site deployment are not hackathon submission.
-  Never register, accept terms, or submit on the user's behalf without the
-  required explicit confirmation; do not record eligibility or acceptance
-  based on these notes.
-
 ## What this is
 
 A Next.js 16 + React 19 + TypeScript (strict) single-page living-room planner
@@ -89,8 +64,9 @@ docs/
   ARCHITECTURE.md   module map, state model, invariants, UI, 3D, theming
   WEBMCP.md         protocol spec: lifecycle, envelope, tools, errors
   TESTING.md        commands, suite contracts, manual verification passes
-  DEPLOYMENT.md     provider-neutral production and public-release checklist
-README.md           product overview, quick start, demo workflows
+  DEPLOYMENT.md     build settings, hosting, and public-release checks
+  DEMOS.md          reproducible WebMCP workflows
+README.md           product overview and quick start
 ```
 
 ## Invariants (never break)
@@ -164,7 +140,8 @@ README.md           product overview, quick start, demo workflows
   test, then decide whether a WebMCP tool should surface it.
 - **New WebMCP tool:** add to `src/webmcp/tools/readTools.ts` (read) or
   `mutationTools.ts` (mutation) following the existing factory pattern;
-  registration is automatic. Update README + `docs/WEBMCP.md` tool tables.
+  registration is automatic. Update the tool tables in `docs/WEBMCP.md`.
+  Keep README concise; detailed schemas and examples belong in `docs/`.
 - **UI change:** verify against the running app at 1440×900 and 375×812 and
   confirm no document-level scroll, no duplicate mounted panels, and no
   lost accessible names/announcements.

@@ -1,12 +1,9 @@
 # Architecture
 
-This document is the deep-dive companion to the README. It maps every
-`src/` module, explains the state model and the domain rules, and records
-the invariants reviewers should hold the code to.
+Module structure, shared state, domain rules, and rendering in AgenticRoom.
 
 Public identity: **AgenticRoom**, defined in `src/data/appIdentity.ts`.
 
----
 
 ## 1. Design principles
 
@@ -223,7 +220,7 @@ read tools log *that a read happened*, never the query text.
   break ties by compatibility score, then savings, then product id;
   validation issues are emitted in fixed order.
 
-## 5. Domain modules in one paragraph each
+## 5. Domain modules
 
 | module | responsibility |
 | --- | --- |

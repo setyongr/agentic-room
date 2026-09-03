@@ -1,10 +1,6 @@
 # Testing and verification
 
-Everything a reviewer or contributor needs to validate the repository:
-commands, what the automated suites prove, and the manual desktop/mobile/
-WebMCP passes that the automated suites deliberately do not cover.
-
----
+Automated coverage and manual checks for the planner and WebMCP integration.
 
 ## 1. Commands
 
@@ -30,7 +26,7 @@ files**, production build succeeds with a single static route (`/`).
   one marketplace panel, no document-level overflow. Product-details controls
   are named and usable; mobile-sheet Escape restores focus to its opener.
 - Codex in-app browser discovered the 22 tools. Room inspection, scene
-  capture, the four-piece hero workflow (including the $594 cart), and Budget
+  capture, the four-piece furnishing workflow (including the $594 cart), and Budget
   Rescue ($684 total, $316 remaining) succeeded through the registered tools.
 - The production route, bundled GLB, and committed preview returned HTTP 200.
 - Basic credential-pattern checks found no matches in the working sources
@@ -41,7 +37,7 @@ files**, production build succeeds with a single static route (`/`).
 This is a scoped local check, not a full accessibility audit or proof that
 every tool/error case was exercised. A deployed-origin check, other browser
 clients, and the complete manual matrix below remain release checks for the
-chosen host. No public deployment or Devpost submission was performed.
+chosen host. No public deployment was performed.
 
 ## 2. Automated suites (`src/domain/*.test.ts`)
 
@@ -62,8 +58,8 @@ catalog products and the seeded room — no React, no store, no WebMCP.
 ## 3. WebMCP verification (browser)
 
 The tools are only observable in a browser that ships the Model Context API.
-Use the browser setup linked from README and record the actual browser/client
-version when verifying a release. The app degrades gracefully elsewhere else.
+Use the [WebMCP browser setup](WEBMCP.md#2-availability-and-registration-lifecycle)
+and record the browser/client version. The planner remains usable without WebMCP.
 
 ### 3.1 Setup
 
@@ -81,8 +77,7 @@ const mc = document.modelContext ?? navigator.modelContext;
 
 ### 3.2 Driver
 
-Use the `run(name, args)` snippet from README ("Testing the WebMCP
-integration in Chrome"). It handles the JSON-string arguments and envelope
+Use the [console driver](WEBMCP.md#3-calling-tools). It handles the JSON-string arguments and envelope
 normalization. Successful logged actions update **Agent activity**; mutations
 also update the scene, spend, or validity as appropriate. Scene snapshots,
 failed calls, and no-op mutations need not add an activity entry.
@@ -136,10 +131,9 @@ failed calls, and no-op mutations need not add an activity entry.
 
 ### 3.4 Demo workflows (end-to-end acceptance)
 
-Both are reproduced step-by-step in README → "Demo workflows" with exact
-expected numbers. Acceptance:
+See [Demo workflows](DEMOS.md) for the commands and expected results:
 
-- **Hero:** default room → place Nook Coffee Table (Center Table), Twist
+- **Furnishing:** default room → place Nook Coffee Table (Center Table), Twist
   Floor Lamp (Sofa Side East), Lita Accent Chair (Reading Corner), Fiddle
   Leaf Fig (Back Wall) → `check_layout` valid → `calculate_total`
   `newTotal: 594` of `700`, `remaining: 106` → `add_to_cart` totals $594.

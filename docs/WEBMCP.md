@@ -1,12 +1,7 @@
-# WebMCP surface specification
+# WebMCP reference
 
-This page specifies the Model Context API surface this app registers — the
-contract an agent (the browser's built-in assistant, a console script, or a
-review harness) can rely on. Source of truth: `src/webmcp/` and the store
-actions it calls. High-level tables also appear in the README; this document
-adds lifecycle, envelope, error, and boundary detail.
-
----
+Browser setup, tool schemas, responses, and error handling for AgenticRoom.
+Implementation: `src/webmcp/` and the actions in `src/store/roomStore.ts`.
 
 ## 1. Overview
 
@@ -37,8 +32,8 @@ Implementation files:
 - Unsupported browsers: registration is skipped, cleanup is a no-op, and the
   planner works normally with no tools exposed.
 - The API is experimental browser functionality and requires a secure
-  origin. Follow the browser setup linked in README; hosts differ in which
-  discovery/execution methods they expose. Confirm with:
+  origin (HTTPS or localhost). Use a browser with WebMCP support enabled;
+  discovery and execution methods vary by host. Confirm availability with:
 
 ```js
 document.modelContext ?? navigator.modelContext ?? 'unavailable in this build'
@@ -49,28 +44,30 @@ document.modelContext ?? navigator.modelContext ?? 'unavailable in this build'
   data). Destructive tools (remove/load/reset paths) carry the destructive
   hint where the host schema supports it.
 
-## 3. Calling tools — envelope
+## 3. Calling tools
+
+Run this helper in DevTools on the planner page. It supports hosts exposing
+`getTools()` and `executeTool()`, normalizing direct JSON and MCP envelopes.
 
 ```js
 const mc = document.modelContext ?? navigator.modelContext;
-const tools = await mc.getTools();                  // tools MUST come from getTools()
-const tool = tools.find((t) => t.name === 'place_product');
-const raw = await mc.executeTool(tool, JSON.stringify(args)); // args MUST be a JSON string
+const run = async (name, args = {}) => {
+  const tools = await mc.getTools(); // tools must come from getTools()
+  const tool = tools.find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`Unknown tool: ${name}`);
+
+  const raw = await mc.executeTool(tool, JSON.stringify(args)); // args must be a JSON string
+  const parsed = JSON.parse(raw);
+  // Chrome integrations may expose the tool JSON directly or inside an MCP envelope.
+  return Array.isArray(parsed?.content)
+    ? JSON.parse(parsed.content[0].text)
+    : parsed;
+};
 ```
 
-Known host quirks (all handled by the README driver snippet):
-
-- `executeTool` **rejects plain objects** — arguments must be a JSON string.
-- The tool object passed to `executeTool` must be the one returned by
-  `getTools()` (the host attaches an `origin` member the registered copy
-  lacks).
-- `getTools()` may return `inputSchema` as a JSON **string** even though
-  `registerTool` accepted an object — normalize with `JSON.parse` when
-  needed.
-- Results may arrive as the tool JSON directly (observed in the browser
-  relay build) or wrapped in the MCP envelope
-  `{content:[{type:'text', text:'<JSON>'}]}` — normalize by unwrapping
-  `content[0].text` when present.
+Pass the tool object returned by `getTools()` and JSON-string arguments to
+`executeTool()`. Some hosts also return `inputSchema` as a JSON string;
+parse it before inspecting its properties.
 
 Every tool result is a JSON object with a `success` discriminant:
 
@@ -177,20 +174,8 @@ byte-identical. A mutation that fails reports no feed entry and no
   snapshots are returned to the connected browser agent; that client's data
   handling is outside this app's control.
 
-## 8. Testing the surface
+## 8. Testing
 
-Full manual passes live in `docs/TESTING.md`; the two end-to-end demo flows
-(human-readable, with exact expected numbers) are in the README under
-"Demo workflows". Quick start for a reviewer:
-
-```bash
-bun install
-bun run dev              # http://localhost:3000
-# DevTools console → confirm availability, then:
-const mc = document.modelContext ?? navigator.modelContext;
-await mc.getTools();     // expect 22 registered names
-```
-
-Then run the driver snippet from README ("Testing the WebMCP integration in
-Chrome") and watch the status bar's Agent activity entry update on every
-call.
+Follow [Testing §3](TESTING.md#3-webmcp-verification-browser) for tool discovery,
+successful calls, failure cases, and state synchronization. The
+[demo workflows](DEMOS.md) include reproducible inputs and expected totals.
