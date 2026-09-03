@@ -40,6 +40,8 @@ import type {
   SerializableResult,
   WallSide,
 } from './types';
+import { DEFAULT_ROOM_DIMENSIONS } from './types';
+import { PLACEMENT_ZONES } from '@/data/placementZones';
 
 /* ------------------------------------------------------------------ */
 /* Supported size ranges (meters)                                      */
@@ -808,5 +810,28 @@ export function setOpeningDimensions(
   return {
     ok: true,
     data: { room: { ...room, openings }, opening, changed: true },
+  };
+}
+
+
+/**
+ * Build an empty project room shell: the requested (or default) real
+ * dimensions, no doors or windows, and the standard placement zones
+ * scaled/dropped for that footprint (the zones give the Furnish rail its
+ * placement guidance once furniture is added back).
+ */
+export function emptyRoom(dimensions: RoomDimensions = DEFAULT_ROOM_DIMENSIONS): RoomData {
+  const baseline = DEFAULT_ROOM_DIMENSIONS;
+  const ratioW = baseline.width > 0 ? dimensions.width / baseline.width : 1;
+  const ratioD = baseline.depth > 0 ? dimensions.depth / baseline.depth : 1;
+  const placementZones: PlacementZone[] = [];
+  for (const zone of PLACEMENT_ZONES) {
+    const resized = resizeZone(zone, ratioW, ratioD);
+    if (resized !== undefined) placementZones.push(resized);
+  }
+  return {
+    dimensions: { ...dimensions },
+    openings: [],
+    placementZones,
   };
 }

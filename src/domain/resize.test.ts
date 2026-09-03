@@ -13,6 +13,7 @@ import { DEFAULT_ROOM } from '@/data/demoRoom';
 import {
   ROOM_SIZE_LIMITS,
   addOpening,
+  emptyRoom,
   moveOpening,
   openingAlongWallCenter,
   openingAlongWallLimits,
@@ -581,5 +582,51 @@ describe('setOpeningDimensions', () => {
     const snapshot = JSON.parse(JSON.stringify(DEFAULT_ROOM)) as RoomData;
     setOpeningDimensions(DEFAULT_ROOM, 'east-window', { sillHeight: 0.6 });
     expect(DEFAULT_ROOM).toEqual(snapshot);
+  });
+});
+
+
+describe('emptyRoom', () => {
+  it('returns the default-sized shell with no openings and every zone', () => {
+    const room = emptyRoom();
+    expect(room.dimensions).toEqual(DEFAULT_ROOM.dimensions);
+    expect(room.openings).toEqual([]);
+    expect(room.placementZones.map((zone) => zone.id)).toEqual(
+      DEFAULT_ROOM.placementZones.map((zone) => zone.id),
+    );
+    // Scaled at ratio 1 the footprints match the authored zones exactly.
+    expect(room.placementZones[0].footprint).toEqual(DEFAULT_ROOM.placementZones[0].footprint);
+  });
+
+  it('keeps the caller dimensions and scales zones onto them', () => {
+    const room = emptyRoom({ width: 8, depth: 6, height: 3.2 });
+    expect(room.dimensions).toEqual({ width: 8, depth: 6, height: 3.2 });
+    expect(room.openings).toEqual([]);
+    const living = room.placementZones.find((zone) => zone.id === 'living-area');
+    expect(living?.footprint.width).toBeCloseTo(3.0 * (8 / 6), 12);
+    expect(living?.footprint.x).toBeCloseTo(0 * (8 / 6), 12);
+    expect(room.placementZones.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('drops zones too small for a minimal room, mirroring resizeRoom', () => {
+    const room = emptyRoom({ width: 2.0, depth: 2.0, height: 2.4 });
+    expect(room.placementZones.map((zone) => zone.id)).toEqual([
+      'reading-corner',
+      'living-area',
+      'center-table',
+    ]);
+    for (const zone of room.placementZones) {
+      expect(zone.footprint.width).toBeGreaterThanOrEqual(0.35);
+      expect(zone.footprint.depth).toBeGreaterThanOrEqual(0.35);
+    }
+  });
+
+  it('returns fresh, independent zone objects on every call', () => {
+    const first = emptyRoom();
+    const second = emptyRoom();
+    expect(first.placementZones).not.toBe(second.placementZones);
+    expect(first.placementZones[0]).not.toBe(second.placementZones[0]);
+    expect(first.placementZones[0].footprint).toEqual(second.placementZones[0].footprint);
+    expect(first.placementZones[0].footprint.x).toBeCloseTo(2.25, 12);
   });
 });

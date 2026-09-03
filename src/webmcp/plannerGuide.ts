@@ -73,7 +73,14 @@ const CAPABILITIES: readonly { name: string; summary: string; tools: readonly st
     name: 'Designs and cart',
     summary:
       'Save the current design as a session snapshot, restore one later, and add placed marketplace pieces to the shopping cart.',
-    tools: ['save_design', 'load_design', 'get_saved_designs', 'add_to_cart', 'remove_cart_item'],
+    tools: [
+      'save_design',
+      'load_design',
+      'get_saved_designs',
+      'new_project',
+      'add_to_cart',
+      'remove_cart_item',
+    ],
   },
 ];
 
@@ -85,7 +92,7 @@ const WORKFLOW: readonly string[] = [
   'Re-tag pieces the user already owns with set_item_source source="existing" so they never count against the budget; everything else stays marketplace and is what set_budget/calculate_total measure.',
   'Adjust the room itself: resize_room to real measurements, add/move/relocate/remove doors and windows with add_opening/move_opening/remove_opening, resize any opening (width, height, and window sill height — the vertical position of a window) with resize_opening, and style it with set_room_appearance.',
   'Check consequences with check_layout and calculate_total after every batch; use render_scene_snapshot to judge the visual result, and get_budget_pressure/find_cheaper_alternatives when over budget.',
-  'When the design is right, save it with save_design so the user can restore it from the Designs panel; marketplace pieces can be added to the cart with add_to_cart and pruned again with remove_cart_item so the cart holds only the handful of items the user intends to buy.',
+  'When the design is right, save it with save_design so the user can restore it from the Designs panel; marketplace pieces can be added to the cart with add_to_cart and pruned again with remove_cart_item so the cart holds only the handful of items the user intends to buy. To start from scratch (the default demo room is only the initial showcase), clear the canvas with new_project — it keeps the measured room size and empties every item, door, and window.',
 ];
 
 /** Rules agents must respect while operating this site. */

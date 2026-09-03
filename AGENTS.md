@@ -25,7 +25,7 @@ before touching anything structural.
 A Next.js 16 + React 19 + TypeScript (strict) single-page living-room planner
 with no backend: a deterministic furniture catalog and room store in the
 browser, a React Three Fiber 3D editor, and a WebMCP surface — the page
-registers 30 tools against Chrome's Model Context API
+registers 31 tools against Chrome's Model Context API
 (`document.modelContext`/`navigator.modelContext`) so a browser agent can
 drive the exact same store actions as the human UI. All product/room data is
 hand-authored constants; no remote assets are fetched at runtime (one bundled sofa GLB loads on demand when placed).
@@ -36,7 +36,7 @@ hand-authored constants; no remote assets are fetched at runtime (one bundled so
 bun install        # dependencies
 bun run dev        # dev server → http://localhost:3000
 bun run check      # typecheck (tsc --noEmit)      — run before finishing
-bun run test       # Vitest domain suites (131 tests, 9 files)
+bun run test       # Vitest domain suites (135 tests, 9 files)
 bun run build      # production build
 bun run build:sites # static export to out/ for Sites
 bun run start      # serve production build
@@ -57,7 +57,7 @@ src/
              placementZones.ts (10), demoRoom.ts (presets), appIdentity.ts (public branding)
   store/     roomStore.ts (single Zustand source of truth), selectors.ts
   webmcp/    registerTools.ts, serialize.ts, tools/{read,mutation}Tools.ts
-             (11 reads / 19 mutations)
+             (11 reads / 20 mutations)
   components/ planner/ (shell + panels + drawers), marketplace/, three/ (R3F)
   app/       page.tsx, layout.tsx, globals.css (Tailwind v4 tokens)
 docs/

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type FormEvent } from 'react';
-import { CheckCircle2, CreditCard, FolderOpen, Plus, RotateCcw, Save, ShoppingBag, Sparkles, Trash2 } from 'lucide-react';
+import { CheckCircle2, CreditCard, FolderOpen, FolderPlus, Plus, RotateCcw, Save, ShoppingBag, Sparkles, Trash2 } from 'lucide-react';
 import { appearancePreviewGradient, resolveAppearance } from '@/data/appearance';
 import { getProductById } from '@/domain/catalog';
 import { selectCartCount, selectCartTotal } from '@/store/selectors';
@@ -33,10 +33,12 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
   const removeCartItem = useRoomStore((state) => state.removeCartItem);
   const checkoutCart = useRoomStore((state) => state.checkoutCart);
   const clearCart = useRoomStore((state) => state.clearCart);
+  const startNewProject = useRoomStore((state) => state.startNewProject);
   const [designName, setDesignName] = useState('');
   const [message, setMessage] = useState('');
   const [messageKind, setMessageKind] = useState<'success' | 'error'>('success');
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [confirmingProject, setConfirmingProject] = useState(false);
 
   function announce(nextMessage: string, kind: 'success' | 'error') {
     setMessage(nextMessage);
@@ -81,6 +83,17 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
     const result = resetToDefault('human');
     setConfirmingReset(false);
     announce(result.ok ? 'Room reset to the default arrangement.' : result.message, result.ok ? 'success' : 'error');
+  }
+
+  function startProject() {
+    const result = startNewProject('human');
+    setConfirmingProject(false);
+    announce(
+      result.ok
+        ? 'Empty project started: every piece, door, and window was removed — the room keeps its measured size.'
+        : result.message,
+      result.ok ? 'success' : 'error',
+    );
   }
 
   function rescueBudget() {
@@ -157,6 +170,51 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
                 Save design
               </button>
             </form>
+          </section>
+
+          <section className="rounded-control border border-border bg-surface-muted/40 p-3" aria-label="New project">
+            {confirmingProject ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm leading-6 text-text">
+                  Start a new empty project? This removes every placed piece, door, and window
+                  (uploaded models too) and resets the budget and finishes to their defaults.
+                  Saved designs stay in your library.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={startProject}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-error px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-focus-ring motion-reduce:transition-none"
+                  >
+                    <FolderPlus className="size-4" aria-hidden="true" />
+                    Start empty project
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingProject(false)}
+                    className="min-h-11 rounded-control px-3 text-sm font-semibold text-text-muted transition-colors hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-focus-ring motion-reduce:transition-none"
+                  >
+                    Keep editing
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold tracking-widest text-accent-strong uppercase">New project</p>
+                <p className="text-xs leading-5 text-text-muted">
+                  Start from a clean canvas at the current room size — no furniture, no doors, no
+                  windows. Enter your real measurements in Furnish → Room size next.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingProject(true)}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control border border-border px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-focus-ring motion-reduce:transition-none"
+                >
+                  <FolderPlus className="size-4" aria-hidden="true" />
+                  New empty project
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="border-y border-border" aria-label="Saved designs">

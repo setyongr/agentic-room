@@ -57,6 +57,8 @@ import type {
   ValidationResult,
 } from '@/domain/types';
 import { BUDGET_RESCUE_SNAPSHOT, DEFAULT_DEMO_SNAPSHOT } from '@/data/demoRoom';
+import { DEFAULT_ROOM_APPEARANCE } from '@/data/appearance';
+import { DEMO_BUDGET } from '@/data/products';
 import * as activity from '@/domain/activity';
 import * as appearance from '@/domain/appearance';
 import * as alternatives from '@/domain/alternatives';
@@ -381,6 +383,13 @@ export interface RoomStore {
   resetToDefault: (origin?: ActionOrigin) => SerializableResult<designs.RestoredDesign>;
   /** Load the Budget Rescue preset (valid layout, $1,140 spent against a $1,000 budget). */
   loadBudgetRescue: (origin?: ActionOrigin) => SerializableResult<designs.RestoredDesign>;
+  /**
+   * Start a brand-new empty project at the current measured room size:
+   * every placed item, door, and window is removed (session uploads too),
+   * the budget and finishes reset to the defaults, and the empty shell is
+   * ready for new room dimensions. Saved designs and the cart are kept.
+   */
+  startNewProject: (origin?: ActionOrigin) => SerializableResult<designs.RestoredDesign>;
   /** Add placed marketplace instances to the cart. */
   addToCart: (instanceIds: readonly string[], origin?: ActionOrigin) => SerializableResult<Cart>;
   /**
@@ -1099,6 +1108,36 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
       commit(prev, restoreDesign(restored.data), origin, {
         type: 'design_restored',
         message: 'Loaded the Budget Rescue preset',
+      });
+      return restored;
+    },
+
+    startNewProject: (origin = 'human') => {
+      const prev = get();
+      const previousItemCount = prev.furniture.length;
+      const previousOpeningCount = prev.room.openings.length;
+      const room = roomResize.emptyRoom(prev.room.dimensions);
+      const budget = DEMO_BUDGET;
+      const snapshot: DesignSnapshot = {
+        id: 'snapshot-empty-project',
+        name: 'Empty Project',
+        createdAt: SESSION_EPOCH,
+        updatedAt: SESSION_EPOCH,
+        room,
+        items: [],
+        budget,
+        appearance: DEFAULT_ROOM_APPEARANCE,
+      };
+      const restored = designs.loadDesignSnapshot(snapshot);
+      if (!restored.ok) return restored;
+      commit(prev, restoreDesign(restored.data), origin, {
+        type: 'project_started',
+        message: `Started an empty project: cleared ${previousItemCount} item${
+          previousItemCount === 1 ? '' : 's'
+        } and ${previousOpeningCount} opening${previousOpeningCount === 1 ? '' : 's'}; room stays ${fmt(
+          room.dimensions.width,
+        )} \u00d7 ${fmt(room.dimensions.depth)} \u00d7 ${fmt(room.dimensions.height)} m`,
+        amount: previousItemCount,
       });
       return restored;
     },

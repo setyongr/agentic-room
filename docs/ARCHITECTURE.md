@@ -63,7 +63,7 @@ src/
     appearance.ts       Room appearance updates (visual-only styling state)
     cart.ts             Marketplace-only cart rules
     activity.ts         Activity feed model: types, templates, bounds
-    *.test.ts           Colocated Vitest suites (9 files, 131 tests)
+    *.test.ts           Colocated Vitest suites (9 files, 135 tests)
   store/
     roomStore.ts        The Zustand store: state, actions, commit pipeline
     selectors.ts        Stable derived selectors (selected item, totals, …)
@@ -74,7 +74,7 @@ src/
     sceneSnapshot.ts    On-demand JPEG capture of the live 3D canvas
                         (backs the render_scene_snapshot read tool)
     tools/readTools.ts      11 read tools (incl. get_planner_guide, render_scene_snapshot)
-    tools/mutationTools.ts  19 mutation tools
+    tools/mutationTools.ts  20 mutation tools
 ```
 
 ## 3. Data model (`src/domain/types.ts`)
@@ -381,10 +381,10 @@ keyboard-accessible control outside the canvas.
 
 See `docs/WEBMCP.md` for the full protocol spec. In brief: `WebMcpProvider`
 calls `registerRoomTools()` in an effect, feature-detects
-`document.modelContext ?? navigator.modelContext`, registers 30 tools (11
-reads, 19 mutations — including the `get_planner_guide` orientation read,
+`document.modelContext ?? navigator.modelContext`, registers 31 tools (11
+reads, 20 mutations — including the `get_planner_guide` orientation read,
 `resize_room`, `move_opening`/`add_opening`/`remove_opening`/`resize_opening`,
-`set_item_source`, `set_item_elevation`, `remove_cart_item`, and
+`set_item_source`, `set_item_elevation`, `remove_cart_item`, `new_project`, and
 `render_scene_snapshot`) with JSON schemas and
 safety annotations, and unregisters on cleanup (Strict Mode safe). Tools call
 the same store actions as the UI with `origin: 'agent'` and return

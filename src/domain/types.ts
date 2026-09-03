@@ -161,6 +161,7 @@ export const ACTIVITY_TYPES = [
   'item_unlocked',
   'design_saved',
   'design_restored',
+  'project_started',
   'cart_item_added',
   'cart_item_removed',
   'checkout_completed',

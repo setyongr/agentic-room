@@ -553,6 +553,40 @@ function replaceProductTool(): ModelContextTool {
   );
 }
 
+/** Start a brand-new empty project (no furniture, doors, or windows). */
+function newProjectTool(): ModelContextTool {
+  return mutationTool(
+    'new_project',
+    'Start a brand-new empty project through the same store action as the UI: every placed item, door, and window is removed (session uploads too), the budget and room finishes reset to their defaults, and the room shell keeps its current measured dimensions so the agent or user can enter the real room size next. Saved designs and the cart are kept. Destructive: the current arrangement is discarded. Returns the new empty state (dimensions, opening count 0, item count 0, budget) and refreshed layout validity and issues.',
+    () => {
+      const state = useRoomStore.getState();
+      const result = state.startNewProject('agent');
+      if (!result.ok) return resultFail(result);
+      const fresh = useRoomStore.getState();
+      const dimensions = fresh.room.dimensions;
+      return toolOk({
+        status: 'started',
+        dimensions: {
+          width: dimensions.width,
+          depth: dimensions.depth,
+          height: dimensions.height,
+        },
+        furnitureCount: fresh.furniture.length,
+        openingCount: fresh.room.openings.length,
+        budget: fresh.budget,
+        remaining: fresh.pricing.remaining,
+        layout: layoutBlock(fresh),
+      });
+    },
+    {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    true,
+  );
+}
+
 /** Save the current design as a snapshot. */
 function saveDesignTool(): ModelContextTool {
   return mutationTool(
@@ -1121,6 +1155,7 @@ export function createMutationTools(): readonly ModelContextTool[] {
     replaceProductTool(),
     saveDesignTool(),
     loadDesignTool(),
+    newProjectTool(),
     addToCartTool(),
     removeCartItemTool(),
   ];

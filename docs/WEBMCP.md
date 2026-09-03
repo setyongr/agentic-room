@@ -6,7 +6,7 @@ Implementation: `src/webmcp/` and the actions in `src/store/roomStore.ts`.
 ## 1. Overview
 
 AgenticRoom exposes tools directly from the page — no binary, daemon, or backend. It registers
-**30 tools** (11 reads, 19 mutations) against Chrome's in-browser Model
+**31 tools** (11 reads, 20 mutations) against Chrome's in-browser Model
 Context API. The human UI and the tools drive the same Zustand store; a tool
 call is indistinguishable from a click except for `origin: 'agent'`, which is
 what makes the completed action visible in the activity feed.
@@ -19,7 +19,7 @@ Implementation files:
 | `src/webmcp/registerTools.ts` | `registerRoomTools()` — detection, registration, unregistration, dev-only warnings. |
 | `src/webmcp/serialize.ts` | Result envelope helpers, input readers (string/number/object/array), per-tool parsing. |
 | `src/webmcp/tools/readTools.ts` | The 11 read tools. |
-| `src/webmcp/tools/mutationTools.ts` | The 19 mutation tools. |
+| `src/webmcp/tools/mutationTools.ts` | The 20 mutation tools. |
 
 ## 2. Availability and registration lifecycle
 
@@ -102,7 +102,7 @@ templates never contain query text or other free-form content.
 `render_scene_snapshot` does not append an activity entry. Its pixels include
 visible imported GLBs even though those objects are outside structured room data.
 
-## 5. Mutation tools (19) — same store actions as the UI, `origin: 'agent'`
+## 5. Mutation tools (20) — same store actions as the UI, `origin: 'agent'`
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
@@ -123,6 +123,7 @@ visible imported GLBs even though those objects are outside structured room data
 | `replace_product` | Swap the product behind an item: same category, in stock, unlocked. Preserves `instanceId`/position/rotation/source; keeps the current color when the replacement offers it, else resets to the replacement's first color, always with the replacement's material. Returns `savings` (negative when pricier) + refreshed layout/pricing | `instanceId`, `replacementProductId` |
 | `save_design` | Capture the live design (room, items with variants, room appearance) as a named snapshot; returns the design summary incl. appearance. Fails with `user_models_not_savable` while session-uploaded models are placed (uploads are never stored) | `name`, `thumbnailGradient?` |
 | `load_design` | Restore a session design incl. room appearance and item variants (destructive: current design is discarded; unknown id → `design_not_found`); restored block includes appearance | `designId` |
+| `new_project` | Start a brand-new empty project (destructive): every placed item, door, and window removed, budget and finishes reset to defaults, room keeps its measured size for the next `resize_room` input; saved designs and the cart are kept. Returns dimensions, `furnitureCount` 0, `openingCount` 0, budget + layout | — |
 | `add_to_cart` | Add placed marketplace instances at catalog prices; all-or-nothing — any unknown/existing/already-carted instance rejects the whole request | `instanceIds` (array) |
 | `remove_cart_item` | Remove one placed instance's cart line (destructive hint: only the cart changes; the furniture stays in the room and can be re-added). Lets a shopper check out just a handful of items. Returns the updated cart | `instanceId` |
 
