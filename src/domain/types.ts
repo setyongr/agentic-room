@@ -31,6 +31,9 @@ export const FURNITURE_CATEGORIES = [
   'plant',
   'curtain',
   'decor',
+  'tv',
+  'soundbar',
+  'speaker',
 ] as const;
 
 /** Furniture category identifier. */
@@ -118,6 +121,7 @@ export type ValidationSeverity = (typeof VALIDATION_SEVERITIES)[number];
 
 export const VALIDATION_ISSUE_KINDS = [
   'out_of_bounds',
+  'height_bounds',
   'overlap',
   'blocks_opening',
   'zone_mismatch',
@@ -158,10 +162,17 @@ export const ACTIVITY_TYPES = [
   'design_saved',
   'design_restored',
   'cart_item_added',
+  'cart_item_removed',
   'checkout_completed',
   'budget_updated',
   'room_appearance_updated',
   'room_resized',
+  'item_source_changed',
+  'item_elevation_changed',
+  'opening_added',
+  'opening_moved',
+  'opening_removed',
+  'opening_resized',
 ] as const;
 
 /** Kind of an activity feed entry. */
@@ -358,6 +369,10 @@ export type ValidationIssue =
       kind: 'out_of_bounds';
       severity: 'error';
       footprint: RectFootprint;
+    })
+  | (ValidationIssueBase & {
+      kind: 'height_bounds';
+      severity: 'error';
     })
   | (ValidationIssueBase & {
       kind: 'overlap';

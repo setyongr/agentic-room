@@ -18,9 +18,16 @@
  */
 
 import * as pricing from '@/domain/pricing';
-import { ROOM_SIZE_LIMITS } from '@/domain/resize';
-import type { FurnitureProduct, PlacedFurniture, SerializableError } from '@/domain/types';
-import { FLOOR_FINISH_IDS, WALL_FINISH_IDS, WALLPAPER_IDS } from '@/domain/types';
+import { ROOM_SIZE_LIMITS, openingAlongWallCenter, openingAlongWallSize } from '@/domain/resize';
+import type { FurnitureProduct, PlacedFurniture, RoomOpening, SerializableError } from '@/domain/types';
+import {
+  FLOOR_FINISH_IDS,
+  FURNITURE_SOURCES,
+  ROOM_OPENING_KINDS,
+  WALL_FINISH_IDS,
+  WALL_SIDES,
+  WALLPAPER_IDS,
+} from '@/domain/types';
 import { DEFAULT_ROOM_APPEARANCE } from '@/data/appearance';
 import { useRoomStore } from '@/store/roomStore';
 import type { RoomStore } from '@/store/roomStore';
@@ -32,6 +39,7 @@ import {
   readOptionalNumber,
   readOptionalString,
   readOptionalStringArray,
+  readRequiredEnum,
   readRequiredNumber,
   readRequiredString,
   toolFail,
@@ -296,6 +304,44 @@ function rotateProductTool(): ModelContextTool {
         },
       },
       required: ['instanceId', 'rotation'],
+      additionalProperties: false,
+    },
+  );
+}
+
+/** Set a placed item's height above the floor (wall mounting). */
+function setItemElevationTool(): ModelContextTool {
+  return mutationTool(
+    'set_item_elevation',
+    'Set how high a placed item\u2019s base sits above the floor (meters) through the same store action as the UI: raise TVs, wall art, shelves, and curtains to hang them instead of resting on the floor. y=0 puts the piece back on the floor. Locked items may be raised (like move/rotate); negative or non-finite heights fail with invalid_elevation. The layout refreshes immediately, so a piece whose top crosses the ceiling surfaces as a height_bounds error. Moving the piece later keeps its height. Returns the item with its updated position, refreshed pricing (newTotal, budget, remaining, overBudget), and current layout validity and issues. Unknown instances fail with item_not_found.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const instanceId = readRequiredString(args.value, 'instanceId', { maxLength: 80 });
+      const y = readRequiredNumber(args.value, 'y', { min: 0 });
+      if (!instanceId.ok) return toolFail(instanceId.code, instanceId.message);
+      if (!y.ok) return toolFail(y.code, y.message);
+      const result = useRoomStore
+        .getState()
+        .setItemElevation(instanceId.value, y.value, 'agent');
+      if (!result.ok) return resultFail(result);
+      const state = useRoomStore.getState();
+      return itemMutationOk(result.data.item, state.getProductById(result.data.item.productId));
+    },
+    {
+      type: 'object',
+      properties: {
+        instanceId: {
+          type: 'string',
+          description: 'Instance id of the placed item to act on, e.g. "existing-sofa" or "aria-55-oled-tv-1".',
+        },
+        y: {
+          type: 'number',
+          description: 'Height of the piece base above the floor in meters, 0 or greater (0 = on the floor). The piece top must stay below the ceiling.',
+          minimum: 0,
+        },
+      },
+      required: ['instanceId', 'y'],
       additionalProperties: false,
     },
   );
@@ -611,6 +657,56 @@ function loadDesignTool(): ModelContextTool {
   );
 }
 
+/** Remove one placed instance's cart line. */
+function removeCartItemTool(): ModelContextTool {
+  return mutationTool(
+    'remove_cart_item',
+    'Remove the cart line for one placed instance through the same store action as the UI. Only the cart changes: the furniture stays in the room and can be re-added while it remains a marketplace piece. Useful when a shopper wants to check out only a handful of the room items. Returns the updated cart (status, itemCount, total, lines) and how many lines remain. Unknown instance ids fail with cart_item_not_found; checked-out carts fail with cart_checked_out.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const instanceId = readRequiredString(args.value, 'instanceId', { maxLength: 80 });
+      if (!instanceId.ok) return toolFail(instanceId.code, instanceId.message);
+      const state = useRoomStore.getState();
+      const result = state.removeCartItem(instanceId.value, 'agent');
+      if (!result.ok) return resultFail(result);
+      const fresh = useRoomStore.getState();
+      const cart = result.data;
+      const truncated = cart.items.length > MAX_LIST_ITEMS;
+      return toolOk({
+        cart: {
+          id: cart.id,
+          status: cart.status,
+          itemCount: cart.items.length,
+          total: cart.total,
+          ...truncatedFlag(truncated),
+          lines: cart.items.slice(-MAX_LIST_ITEMS).map((line) => ({
+            id: line.id,
+            productId: line.productId,
+            name: fresh.getProductById(line.productId)?.name ?? line.productId,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            ...(line.instanceId !== undefined ? { instanceId: line.instanceId } : {}),
+          })),
+        },
+        removed: true,
+      });
+    },
+    {
+      type: 'object',
+      properties: {
+        instanceId: {
+          type: 'string',
+          description: 'Placed instance id whose cart line should be removed, e.g. "aria-55-oled-tv-1".',
+        },
+      },
+      required: ['instanceId'],
+      additionalProperties: false,
+    },
+    true,
+  );
+}
+
 /** Add placed marketplace items to the shopping cart. */
 function addToCartTool(): ModelContextTool {
   return mutationTool(
@@ -755,6 +851,249 @@ function setRoomAppearanceTool(): ModelContextTool {
   );
 }
 
+/** Compact opening card: identity, wall placement, and real sizes. */
+function openingCard(opening: RoomOpening): Record<string, unknown> {
+  return {
+    id: opening.id,
+    kind: opening.kind,
+    wall: opening.wall,
+    alongCenterM: openingAlongWallCenter(opening),
+    alongWidthM: openingAlongWallSize(opening),
+    heightM: opening.height,
+    sillM: opening.sillHeight,
+    footprint: {
+      x: opening.footprint.x,
+      z: opening.footprint.z,
+      width: opening.footprint.width,
+      depth: opening.footprint.depth,
+    },
+  };
+}
+
+/** Success payload for opening mutations: the opening plus refreshed layout. */
+function openingMutationOk(opening: RoomOpening): string {
+  return toolOk({ opening: openingCard(opening), layout: layoutBlock(useRoomStore.getState()) });
+}
+
+/** Change a door/window size: width, height, sill (windows only). */
+function resizeOpeningTool(): ModelContextTool {
+  return mutationTool(
+    'resize_opening',
+    'Resize a door or window through the same store action as the UI. alongSize is the along-wall width in meters, height is the opening height, and sillHeight (windows only) is how high the opening\u2019s bottom edge sits above the floor — the window\u2019s vertical position. At least one field is required; doors must keep sillHeight 0 (they sit on the floor). Feasible ranges are wall- and ceiling-dependent: out-of-range values fail with invalid_opening_size (details: field, min, max), widening into another opening on the same wall fails with opening_overlap, unknown ids with opening_not_found. The opening keeps its center. Returns the resized opening (id, kind, wall, alongCenterM, alongWidthM, heightM, sillM, footprint) and refreshed layout validity and issues.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const openingId = readRequiredString(args.value, 'openingId', { maxLength: 80 });
+      const alongSize = readOptionalNumber(args.value, 'alongSize');
+      const height = readOptionalNumber(args.value, 'height');
+      const sillHeight = readOptionalNumber(args.value, 'sillHeight');
+      if (!openingId.ok) return toolFail(openingId.code, openingId.message);
+      if (!alongSize.ok) return toolFail(alongSize.code, alongSize.message);
+      if (!height.ok) return toolFail(height.code, height.message);
+      if (!sillHeight.ok) return toolFail(sillHeight.code, sillHeight.message);
+      if (alongSize.value === undefined && height.value === undefined && sillHeight.value === undefined) {
+        return toolFail('invalid_args', 'Specify at least one of "alongSize", "height", or "sillHeight"');
+      }
+      const result = useRoomStore.getState().setOpeningDimensions(
+        openingId.value,
+        {
+          ...(alongSize.value !== undefined ? { alongSize: alongSize.value } : {}),
+          ...(height.value !== undefined ? { height: height.value } : {}),
+          ...(sillHeight.value !== undefined ? { sillHeight: sillHeight.value } : {}),
+        },
+        'agent',
+      );
+      if (!result.ok) return resultFail(result);
+      return openingMutationOk(result.data.opening);
+    },
+    {
+      type: 'object',
+      properties: {
+        openingId: {
+          type: 'string',
+          description: 'Opening id, e.g. "entry-door", "east-window", "balcony-door", or "opening-1" for added ones.',
+        },
+        alongSize: {
+          type: 'number',
+          description: 'New along-wall width in meters (x for north/south walls, z for east/west).',
+          minimum: 0,
+        },
+        height: {
+          type: 'number',
+          description: 'New opening height in meters; the top stays below the ceiling.',
+          minimum: 0,
+        },
+        sillHeight: {
+          type: 'number',
+          description: 'Windows only: how high the bottom edge sits above the floor (the window vertical position). Doors keep 0.',
+          minimum: 0,
+        },
+      },
+      required: ['openingId'],
+      additionalProperties: false,
+    },
+  );
+}
+
+/** Re-tag a placed item as already owned or a new marketplace purchase. */
+function setItemSourceTool(): ModelContextTool {
+  return mutationTool(
+    'set_item_source',
+    'Re-tag a placed item\u2019s ownership through the same store action as the UI: source "existing" marks it as already owned (never counted toward the budget), source "marketplace" marks it as a new purchase (counted). Locked items may be re-tagged (the lock only guards removal and replacement); setting the current source is a no-op success. Budget pricing and validation refresh in the same write. Returns the item with its source, refreshed pricing (newTotal, budget, remaining, overBudget), and current layout validity and issues. Unknown instances fail with item_not_found.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const instanceId = readRequiredString(args.value, 'instanceId', { maxLength: 80 });
+      const source = readRequiredEnum(args.value, 'source', FURNITURE_SOURCES);
+      if (!instanceId.ok) return toolFail(instanceId.code, instanceId.message);
+      if (!source.ok) return toolFail(source.code, source.message);
+      const result = useRoomStore
+        .getState()
+        .setItemSource(instanceId.value, source.value, 'agent');
+      if (!result.ok) return resultFail(result);
+      const state = useRoomStore.getState();
+      return itemMutationOk(result.data.item, state.getProductById(result.data.item.productId));
+    },
+    {
+      type: 'object',
+      properties: {
+        instanceId: {
+          type: 'string',
+          description: 'Instance id of the placed item to act on, e.g. "existing-sofa" or "drift-oak-coffee-table-1".',
+        },
+        source: {
+          type: 'string',
+          description: '"existing" = already owned (never counted toward the budget); "marketplace" = new purchase (counted).',
+          enum: [...FURNITURE_SOURCES],
+        },
+      },
+      required: ['instanceId', 'source'],
+      additionalProperties: false,
+    },
+  );
+}
+
+/** Move a door or window along its wall, or onto another wall. */
+function moveOpeningTool(): ModelContextTool {
+  return mutationTool(
+    'move_opening',
+    'Move a door or window through the same store action as the UI: alongCenter is the opening\u2019s center along its current wall in room coordinates (x for north/south walls, z for east/west walls); pass wall to relocate the opening onto a different wall (its real size is preserved and the footprint re-orients). Centers are clamped to the wall and moves that would collide with another opening on the target wall fail with opening_overlap; unknown ids fail with opening_not_found and unusable walls or non-finite centers with invalid_opening_position. Clearance validation refreshes immediately. Returns the opening (id, kind, wall, alongCenterM, alongWidthM, heightM, sillM, footprint) and current layout validity and issues.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const openingId = readRequiredString(args.value, 'openingId', { maxLength: 80 });
+      const alongCenter = readRequiredNumber(args.value, 'alongCenter');
+      const wall = readOptionalEnum(args.value, 'wall', WALL_SIDES);
+      if (!openingId.ok) return toolFail(openingId.code, openingId.message);
+      if (!alongCenter.ok) return toolFail(alongCenter.code, alongCenter.message);
+      if (!wall.ok) return toolFail(wall.code, wall.message);
+      const result = useRoomStore
+        .getState()
+        .setOpeningPosition(openingId.value, alongCenter.value, wall.value, 'agent');
+      if (!result.ok) return resultFail(result);
+      return openingMutationOk(result.data.opening);
+    },
+    {
+      type: 'object',
+      properties: {
+        openingId: {
+          type: 'string',
+          description: 'Opening id, e.g. "entry-door", "east-window", "balcony-door", or "opening-1" for added ones.',
+        },
+        alongCenter: {
+          type: 'number',
+          description: 'New along-wall center in meters: x for north/south walls, z for east/west walls. Clamped to the wall.',
+        },
+        wall: {
+          type: 'string',
+          description: 'Optional target wall to relocate the opening onto; omit to move along the current wall.',
+          enum: [...WALL_SIDES],
+        },
+      },
+      required: ['openingId', 'alongCenter'],
+      additionalProperties: false,
+    },
+  );
+}
+
+/** Add a standard door or window to any wall. */
+function addOpeningTool(): ModelContextTool {
+  return mutationTool(
+    'add_opening',
+    'Add a standard door (0.9 m wide, 2.1 m high) or window (1.6 m wide, 1.4 m high at a 0.9 m sill) to any wall through the same store action as the UI. Without center, the opening lands in the first free span of the wall; an explicit center is clamped to the wall. Heights are capped below the ceiling automatically. Failures: duplicate_opening_id for taken ids (ids are minted for you), opening_overlap when another opening already occupies the spot, invalid_opening_position when the wall is too short or fully occupied. Clearance validation refreshes immediately. Returns the added opening (id, kind, wall, alongCenterM, alongWidthM, heightM, sillM, footprint) and current layout validity and issues.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const kind = readRequiredEnum(args.value, 'kind', ROOM_OPENING_KINDS);
+      const wall = readRequiredEnum(args.value, 'wall', WALL_SIDES);
+      const center = readOptionalNumber(args.value, 'center');
+      if (!kind.ok) return toolFail(kind.code, kind.message);
+      if (!wall.ok) return toolFail(wall.code, wall.message);
+      if (!center.ok) return toolFail(center.code, center.message);
+      const result = useRoomStore.getState().addOpening(
+        {
+          kind: kind.value,
+          wall: wall.value,
+          ...(center.value !== undefined ? { center: center.value } : {}),
+        },
+        'agent',
+      );
+      if (!result.ok) return resultFail(result);
+      return openingMutationOk(result.data.opening);
+    },
+    {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          description: 'What to add: "door" (0.9 m wide, 2.1 m high) or "window" (1.6 m wide, sill 0.9 m).',
+          enum: [...ROOM_OPENING_KINDS],
+        },
+        wall: {
+          type: 'string',
+          description: 'Wall to cut the opening into.',
+          enum: [...WALL_SIDES],
+        },
+        center: {
+          type: 'number',
+          description: 'Optional along-wall center in meters (x for north/south walls, z for east/west). Defaults to the first free span.',
+        },
+      },
+      required: ['kind', 'wall'],
+      additionalProperties: false,
+    },
+  );
+}
+
+/** Remove a door or window from the room. */
+function removeOpeningTool(): ModelContextTool {
+  return mutationTool(
+    'remove_opening',
+    'Remove a door or window from the room through the same store action as the UI (seeded openings included). Destructive: the opening is permanently gone from the current design; clearance validation refreshes immediately, so furniture that used to block it clears. Unknown ids fail with opening_not_found. Returns the removed opening (id, kind, wall, alongCenterM, alongWidthM, heightM, sillM, footprint) and current layout validity and issues.',
+    (input) => {
+      const args = readObjectInput(input);
+      if (!args.ok) return toolFail(args.code, args.message);
+      const openingId = readRequiredString(args.value, 'openingId', { maxLength: 80 });
+      if (!openingId.ok) return toolFail(openingId.code, openingId.message);
+      const result = useRoomStore.getState().removeOpening(openingId.value, 'agent');
+      if (!result.ok) return resultFail(result);
+      return openingMutationOk(result.data.opening);
+    },
+    {
+      type: 'object',
+      properties: {
+        openingId: {
+          type: 'string',
+          description: 'Opening id, e.g. "entry-door", "east-window", "balcony-door", or "opening-1" for added ones.',
+        },
+      },
+      required: ['openingId'],
+      additionalProperties: false,
+    },
+    true,
+  );
+}
+
 /**
  * The complete mutating WebMCP tool surface for the room editor.
  *
@@ -768,14 +1107,21 @@ export function createMutationTools(): readonly ModelContextTool[] {
     placeProductTool(),
     moveProductTool(),
     rotateProductTool(),
+    setItemElevationTool(),
     removeProductTool(),
     setItemLockedTool(),
+    setItemSourceTool(),
     setBudgetTool(),
     setRoomAppearanceTool(),
     resizeRoomTool(),
+    moveOpeningTool(),
+    addOpeningTool(),
+    removeOpeningTool(),
+    resizeOpeningTool(),
     replaceProductTool(),
     saveDesignTool(),
     loadDesignTool(),
     addToCartTool(),
+    removeCartItemTool(),
   ];
 }

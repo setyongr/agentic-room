@@ -17,7 +17,7 @@ bun run start      # serve the production build   (http://localhost:3000)
 bun run dev        # development server with HMR
 ```
 
-Expected baseline at time of writing: typecheck clean, **66 tests across 8
+Expected baseline at time of writing: typecheck clean, **131 tests across 9
 files**, production build succeeds with a single static route (`/`).
 
 ### Release-preparation pass — September 3, 2026
@@ -69,11 +69,11 @@ bun run build && bun run start   # or: bun run dev
 # open http://localhost:3000
 ```
 
-Confirm the API is present and 22 tools registered:
+Confirm the API is present and 30 tools registered:
 
 ```js
 const mc = document.modelContext ?? navigator.modelContext;
-(await mc.getTools()).map((t) => t.name); // 22 names: 10 reads + 12 mutations
+(await mc.getTools()).map((t) => t.name); // 30 names: 11 reads + 19 mutations
 ```
 
 ### 3.2 Driver

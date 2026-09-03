@@ -6,6 +6,7 @@ import { ROOM_SIZE_LIMITS } from '@/domain/resize';
 import { isBalconyOpening } from '@/domain/validation';
 import { DEFAULT_ROOM_DIMENSIONS, type RoomDimensions, type RoomOpening } from '@/domain/types';
 import { useRoomStore } from '@/store/roomStore';
+import { OpeningsEditor } from '@/components/marketplace/OpeningsEditor';
 
 type Feedback = { kind: 'success' | 'error'; message: string } | null;
 
@@ -241,6 +242,10 @@ export function RoomSizePanel() {
             <RotateCcw className="size-4" aria-hidden="true" />
             Reset to demo size (6 × 4.5 × 2.8 m)
           </button>
+        </div>
+
+        <div className="mt-6 border-t border-border pt-4">
+          <OpeningsEditor />
         </div>
       </div>
       <div

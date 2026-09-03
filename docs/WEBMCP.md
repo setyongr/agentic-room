@@ -6,7 +6,7 @@ Implementation: `src/webmcp/` and the actions in `src/store/roomStore.ts`.
 ## 1. Overview
 
 AgenticRoom exposes tools directly from the page — no binary, daemon, or backend. It registers
-**22 tools** (10 reads, 12 mutations) against Chrome's in-browser Model
+**30 tools** (11 reads, 19 mutations) against Chrome's in-browser Model
 Context API. The human UI and the tools drive the same Zustand store; a tool
 call is indistinguishable from a click except for `origin: 'agent'`, which is
 what makes the completed action visible in the activity feed.
@@ -18,8 +18,8 @@ Implementation files:
 | `src/webmcp/types.ts` | Minimal local typings for the API (no SDK dependency): tool/schema/annotation shapes. |
 | `src/webmcp/registerTools.ts` | `registerRoomTools()` — detection, registration, unregistration, dev-only warnings. |
 | `src/webmcp/serialize.ts` | Result envelope helpers, input readers (string/number/object/array), per-tool parsing. |
-| `src/webmcp/tools/readTools.ts` | The 10 read tools. |
-| `src/webmcp/tools/mutationTools.ts` | The 12 mutation tools. |
+| `src/webmcp/tools/readTools.ts` | The 11 read tools. |
+| `src/webmcp/tools/mutationTools.ts` | The 19 mutation tools. |
 
 ## 2. Availability and registration lifecycle
 
@@ -78,10 +78,11 @@ Every tool result is a JSON object with a `success` discriminant:
 { "success": false, "error": "Human readable message", "code": "machine_code", "...details": "..." }
 ```
 
-## 4. Read tools (10) — leave the room design unchanged
+## 4. Read tools (11) — leave the room design unchanged
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
+| `get_planner_guide` | **Call first.** Static site orientation: what AgenticRoom is, every capability with its exact tool names, a recommended design workflow, and the invariants agents must respect (budget counts marketplace items only, lock rules, session-only uploads, deterministic ids, activity privacy). No arguments; never reads session state and never logs | — |
 | `get_room_state` | Room dimensions/openings (plus supported resize ranges), room appearance (wall/floor/wallpaper ids), every placed item (id, name, category, extents, position, rotation, locked, source, budget price, color/material variant), budget, live pricing, live validation, last saved design name | — |
 | `get_available_placement_zones` | Zones accepting `category` with capacity left: footprints, occupancy, remaining | `category` (enum) |
 | `search_products` | Deterministic catalog search: free-text + category/style/color/material/price filters, dimension window (`maxWidth`/`maxDepth`), sort, paging | `query`, `category`, `styles`, `colors`, `materials`, `minPrice`, `maxPrice`, `inStockOnly`, `sort`, `maxWidth`, `maxDepth`, `page`, `pageSize` |
@@ -101,22 +102,29 @@ templates never contain query text or other free-form content.
 `render_scene_snapshot` does not append an activity entry. Its pixels include
 visible imported GLBs even though those objects are outside structured room data.
 
-## 5. Mutation tools (12) — same store actions as the UI, `origin: 'agent'`
+## 5. Mutation tools (19) — same store actions as the UI, `origin: 'agent'`
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
 | `place_product` | Add a product. `zoneId` places at the zone center with category/capacity/footprint enforcement; `position {x, z}` places explicitly. Schema requires **exactly one** of `zoneId`/`position` (`oneOf`). Optional `color`/`material` select the visual variant (defaults: first authored color + authored material); unknown colors/materials fail with `invalid_variant`. Returns the item (with its stored variant) + refreshed pricing/layout | `productId`, `zoneId` **or** `position`, `rotation?`, `color?`, `material?` |
 | `move_product` | Move an item to new x/z (locked items may move; geometry is not re-checked — validation refreshes immediately after) | `instanceId`, `position {x, z}` |
 | `rotate_product` | Set yaw degrees; normalized to [0, 360) | `instanceId`, `rotation` |
+| `set_item_elevation` | Set the piece's height above the floor (`y` meters, ≥ 0) so TVs, wall art, and shelves can hang instead of resting on the floor; `y=0` returns it to the floor. Locked items may be raised; moving a raised piece keeps its height. A top above the ceiling surfaces as a `height_bounds` layout error. Returns the item + refreshed pricing/layout | `instanceId`, `y` |
 | `remove_product` | Remove an item (destructive hint; locked → `item_locked`) | `instanceId` |
 | `set_item_locked` | Lock/unlock; locked rejects remove/replace but allows move/rotate. Setting the current value is a success no-op | `instanceId`, `locked` |
+| `set_item_source` | Re-tag a placed item's ownership: `existing` = already owned (never counted toward the budget), `marketplace` = new purchase (counted). Locked items may be re-tagged; same source is a no-op success. Pricing and budget validation refresh in the same write. Returns the item + refreshed pricing/layout | `instanceId`, `source` |
 | `set_budget` | Budget ≥ 0; refreshes the budget validation + pricing immediately | `budget` |
 | `set_room_appearance` | Style the room (visual only; pricing/layout untouched). Either `preset: "default"` or all three explicit finish ids; mixed/partial inputs fail with `invalid_args`. Returns the resolved appearance + layout | `preset` **or** `wallFinishId` + `floorFinishId` + `wallpaperId` |
 | `resize_room` | Resize the room shell to real measured dimensions. All of `width`/`depth`/`height` in meters within the supported ranges (`get_room_state` → `room.resizeLimits`; out-of-range fails with `invalid_room_size`). Openings keep their walls (scaled proportionally, clamped on-wall; openings whose wall became too short are removed and reported) and placement zones rebuild with the room. Furniture never moves — pieces left outside the new walls surface as layout errors. Returns `status` (`resized`/`unchanged`), `dimensions`, `floorAreaM2`, `removedOpeningIds` + refreshed pricing/layout | `width`, `depth`, `height` |
+| `move_opening` | Move a door/window along its current wall (clamped), or relocate it onto another wall with `wall`. Refused when it would collide with another opening on the target wall (`opening_overlap`). Returns the opening (id, kind, wall, along-center/width, height, sill, footprint) + refreshed layout | `openingId`, `alongCenter`, `wall?` |
+| `add_opening` | Add a standard door (0.9 m wide, 2.1 m high) or window (1.6 m wide, 1.4 m high at a 0.9 m sill) to any wall; without `center` it lands in the first free span. Heights cap below the ceiling. Returns the added opening + refreshed layout | `kind`, `wall`, `center?` |
+| `remove_opening` | Remove a door/window (destructive hint; seeded openings included). Returns the removed opening + refreshed layout | `openingId` |
+| `resize_opening` | Resize a door/window on its wall: `alongSize` (width), `height`, and for windows `sillHeight` — how high the bottom edge sits above the floor (the window's vertical position; doors stay at 0). At least one field required; wall/ceiling-dependent ranges enforced (`invalid_opening_size`), widening into another opening fails with `opening_overlap`. Returns the resized opening + refreshed layout | `openingId`, `alongSize?`, `height?`, `sillHeight?` |
 | `replace_product` | Swap the product behind an item: same category, in stock, unlocked. Preserves `instanceId`/position/rotation/source; keeps the current color when the replacement offers it, else resets to the replacement's first color, always with the replacement's material. Returns `savings` (negative when pricier) + refreshed layout/pricing | `instanceId`, `replacementProductId` |
 | `save_design` | Capture the live design (room, items with variants, room appearance) as a named snapshot; returns the design summary incl. appearance. Fails with `user_models_not_savable` while session-uploaded models are placed (uploads are never stored) | `name`, `thumbnailGradient?` |
 | `load_design` | Restore a session design incl. room appearance and item variants (destructive: current design is discarded; unknown id → `design_not_found`); restored block includes appearance | `designId` |
 | `add_to_cart` | Add placed marketplace instances at catalog prices; all-or-nothing — any unknown/existing/already-carted instance rejects the whole request | `instanceIds` (array) |
+| `remove_cart_item` | Remove one placed instance's cart line (destructive hint: only the cart changes; the furniture stays in the room and can be re-added). Lets a shopper check out just a handful of items. Returns the updated cart | `instanceId` |
 
 Each successful mutation returns the store's refreshed `pricing` and
 `layout` alongside its specific payload (e.g. `place_product` → `item`;
@@ -142,9 +150,17 @@ unchanged. Codes exercised by the test suite and demo workflows:
 | `invalid_snapshot` | Snapshot shape is corrupt and cannot be restored. |
 | `cart_checked_out` | Cart is no longer accepting items. |
 | `cart_add_rejected` | Some requested instances could not be added (details list the rejections). |
+| `cart_item_not_found` | `remove_cart_item` referenced an instance with no cart line (details: `instanceId`). |
 | `invalid_variant` | Place/replace requested a color not offered by the product or a mismatched material (details: `requestedVariant`, `availableColors`, `availableMaterials`). |
 | `invalid_room_appearance` | Appearance update referenced an unknown finish/wallpaper id (details: `field`, `value`, `allowedValues`). |
 | `invalid_room_size` | Room resize requested dimensions outside the supported ranges (details: `dimensions`, `limits`). |
+| `invalid_elevation` | `set_item_elevation` received a non-finite or negative height (details: `y`). |
+| `height_bounds` | Layout issue kind: a placed piece's top crosses the ceiling (or its base is below the floor). |
+| `opening_not_found` | Opening action referenced an id that is not cut into the room (details: `openingId`). |
+| `opening_overlap` | An add/move would collide with another opening on the same wall (details: `otherOpeningId`, `center`). |
+| `invalid_opening_position` | Opening add/move on a wall too short or too full to host it, or a non-finite center (details: `wall`/`center`). |
+| `duplicate_opening_id` | `add_opening` requested an id already in the room (ids are normally minted automatically). |
+| `invalid_opening_size` | `resize_opening` received an out-of-range or non-finite dimension, or a non-zero sill on a door (details: `field`, `min`, `max`). |
 | `user_models_not_savable` | `save_design` while session-uploaded models are placed (uploads are never stored; details: `userModelIds`). |
 | `user_model_not_found` | User-model action referenced an id that is no longer placed. |
 | `invalid_rotation` | Uploaded-model rotation is not a finite number of degrees. |

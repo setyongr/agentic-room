@@ -6,7 +6,9 @@ import {
   removeProduct,
   replaceProduct,
   rotateProduct,
+  setItemElevation,
   setItemLocked,
+  setItemSource,
 } from '@/domain/placement';
 import type { PlacedFurniture } from '@/domain/types';
 
@@ -190,5 +192,114 @@ describe('variant preservation', () => {
     if (!result.ok) throw new Error(`expected replacement to succeed: ${result.code}`);
     expect(result.data.item.productId).toBe('arc-dome-floor-lamp');
     expect(result.data.item.variant).toEqual({ color: 'mustard', material: 'steel' });
+  });
+});
+
+
+describe('setItemSource', () => {
+  it('re-tags an existing item as a marketplace purchase', () => {
+    const items = buildItems();
+    const result = setItemSource('locked-sofa', items, 'marketplace');
+    if (!result.ok) throw new Error(`expected re-tag to succeed: ${result.code}`);
+    expect(result.data.item.source).toBe('marketplace');
+    expect(result.data.item.instanceId).toBe('locked-sofa');
+    expect(result.data.item.locked).toBe(true); // lock is not ownership
+    // The caller's array is never mutated.
+    expect(items[0].source).toBe('existing');
+  });
+
+  it('re-tags a marketplace item as already owned', () => {
+    const items = buildItems();
+    const result = setItemSource('market-lamp', items, 'existing');
+    if (!result.ok) throw new Error(`expected re-tag to succeed: ${result.code}`);
+    expect(result.data.item.source).toBe('existing');
+  });
+
+  it('preserves position, rotation, and variant when re-tagging', () => {
+    const items = buildItems();
+    const result = setItemSource('market-lamp', items, 'existing');
+    if (!result.ok) throw new Error(`expected re-tag to succeed: ${result.code}`);
+    expect(result.data.item.position).toEqual({ x: 1.75, y: 0, z: -1.5 });
+    expect(result.data.item.rotation).toBe(0);
+    expect(result.data.item.variant).toEqual({ color: 'cream', material: 'brass' });
+  });
+
+  it('is a no-op success when the source is unchanged', () => {
+    const items = buildItems();
+    const result = setItemSource('locked-sofa', items, 'existing');
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected success');
+    expect(result.data.items).toBe(items); // same reference: nothing changed
+  });
+
+  it('fails with item_not_found for an unknown instance and leaves state intact', () => {
+    const items = buildItems();
+    const result = setItemSource('ghost-item', items, 'marketplace');
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.code).toBe('item_not_found');
+    expect(items.map((item) => item.source)).toEqual(['existing', 'marketplace']);
+  });
+});
+
+
+describe('setItemElevation', () => {
+  it('raises an item above the floor and preserves every other field', () => {
+    const items = buildItems();
+    const result = setItemElevation('market-lamp', items, 1.2);
+    if (!result.ok) throw new Error(`expected elevation to succeed: ${result.code}`);
+    expect(result.data.item.position.y).toBe(1.2);
+    expect(result.data.item.position.x).toBe(1.75);
+    expect(result.data.item.position.z).toBe(-1.5);
+    expect(result.data.item.rotation).toBe(0);
+    expect(result.data.item.variant).toEqual({ color: 'cream', material: 'brass' });
+    expect(result.data.item.source).toBe('marketplace');
+    // Caller array untouched.
+    expect(items[1].position.y).toBe(0);
+  });
+
+  it('allows raising locked items', () => {
+    const items = buildItems();
+    const result = setItemElevation('locked-sofa', items, 0.4);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected success');
+    expect(result.data.item.locked).toBe(true);
+  });
+
+  it('is a no-op success when the height is unchanged', () => {
+    const items = buildItems();
+    const result = setItemElevation('market-lamp', items, 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected success');
+    expect(result.data.items).toBe(items);
+  });
+
+  it('rejects negative and non-finite heights with invalid_elevation', () => {
+    const items = buildItems();
+    for (const y of [-0.1, Number.NaN, Infinity]) {
+      const result = setItemElevation('market-lamp', items, y);
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error('expected failure');
+      expect(result.code).toBe('invalid_elevation');
+    }
+    expect(items[1].position.y).toBe(0);
+  });
+
+  it('fails with item_not_found for unknown instances', () => {
+    const result = setItemElevation('ghost-item', buildItems(), 1);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.code).toBe('item_not_found');
+  });
+});
+
+describe('moveProduct preserves elevation', () => {
+  it('keeps the raised height when sliding an item', () => {
+    const items = buildItems();
+    const raised = setItemElevation('market-lamp', items, 1.3);
+    if (!raised.ok) throw new Error('expected elevation to succeed');
+    const moved = moveProduct('market-lamp', raised.data.items, 2, 2);
+    if (!moved.ok) throw new Error('expected move to succeed');
+    expect(moved.data.item.position).toEqual({ x: 2, y: 1.3, z: 2 });
   });
 });

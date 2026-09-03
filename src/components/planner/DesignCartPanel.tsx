@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type FormEvent } from 'react';
-import { FolderOpen, Plus, RotateCcw, Save, ShoppingBag, Sparkles } from 'lucide-react';
+import { CheckCircle2, CreditCard, FolderOpen, Plus, RotateCcw, Save, ShoppingBag, Sparkles, Trash2 } from 'lucide-react';
 import { appearancePreviewGradient, resolveAppearance } from '@/data/appearance';
 import { getProductById } from '@/domain/catalog';
 import { selectCartCount, selectCartTotal } from '@/store/selectors';
@@ -30,6 +30,9 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
   const resetToDefault = useRoomStore((state) => state.resetToDefault);
   const loadBudgetRescue = useRoomStore((state) => state.loadBudgetRescue);
   const addToCart = useRoomStore((state) => state.addToCart);
+  const removeCartItem = useRoomStore((state) => state.removeCartItem);
+  const checkoutCart = useRoomStore((state) => state.checkoutCart);
+  const clearCart = useRoomStore((state) => state.clearCart);
   const [designName, setDesignName] = useState('');
   const [message, setMessage] = useState('');
   const [messageKind, setMessageKind] = useState<'success' | 'error'>('success');
@@ -83,6 +86,32 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
   function rescueBudget() {
     const result = loadBudgetRescue('human');
     announce(result.ok ? 'Budget Rescue starter loaded.' : result.message, result.ok ? 'success' : 'error');
+  }
+
+  function removeCartLine(instanceId: string, name: string) {
+    const result = removeCartItem(instanceId, 'human');
+    announce(
+      result.ok ? `Removed ${name} from the cart.` : result.message,
+      result.ok ? 'success' : 'error',
+    );
+  }
+
+  function checkout() {
+    const result = checkoutCart();
+    if (!result.ok) {
+      announce(result.message, 'error');
+      return;
+    }
+    const order = result.data;
+    announce(
+      `Mock checkout complete: order ${order.orderId} — ${money(order.total)} for ${order.cart.items.length} item${order.cart.items.length === 1 ? '' : 's'}.`,
+      'success',
+    );
+  }
+
+  function startNewCart() {
+    const result = clearCart();
+    announce(result.ok ? 'Started a new cart.' : result.message, result.ok ? 'success' : 'error');
   }
 
   function addAvailableItems() {
@@ -198,16 +227,31 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={addAvailableItems}
-              disabled={availableCartItems.length === 0}
-              className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-focus-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              {availableCartItems.length === 0 ? 'Cart is up to date' : `Add ${availableCartItems.length} room item${availableCartItems.length === 1 ? '' : 's'}`}
-            </button>
-            <p className="mt-2 text-xs leading-5 text-text-muted">Only marketplace pieces can be added. Existing room items stay out of your cart.</p>
+            {cart.status === 'checked_out' ? (
+              <div className="mt-4 flex items-start gap-3 rounded-control border border-success bg-success-soft px-3 py-3" role="status">
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-semibold text-text">Checked out</p>
+                  <p className="mt-0.5 text-xs leading-5 text-text-muted">
+                    This mock order is complete. The lines below are kept for reference; start a
+                    new cart to shop again.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={addAvailableItems}
+                  disabled={availableCartItems.length === 0}
+                  className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-focus-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none"
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                  {availableCartItems.length === 0 ? 'Cart is up to date' : `Add ${availableCartItems.length} room item${availableCartItems.length === 1 ? '' : 's'}`}
+                </button>
+                <p className="mt-2 text-xs leading-5 text-text-muted">Only marketplace pieces can be added. Existing room items stay out of your cart.</p>
+              </>
+            )}
           </section>
 
           <section className="border-y border-border" aria-label="Cart contents">
@@ -228,19 +272,60 @@ export function DesignCartPanel({ view }: DesignCartPanelProps) {
                     const product = getProductById(item.productId);
                     const name = product?.name ?? item.productId;
                     return (
-                      <li key={item.id} className="grid grid-cols-2 gap-x-3 gap-y-1 py-3">
-                        <p className="truncate text-sm font-semibold text-text">{name}</p>
-                        <p className="text-right font-mono text-sm font-semibold tabular-nums text-text">{money(item.unitPrice * item.quantity)}</p>
-                        <p className="text-xs text-text-muted">{product?.category ?? 'Marketplace item'} · {money(item.unitPrice)} each</p>
-                        <p className="text-right font-mono text-xs tabular-nums text-text-muted">Qty {item.quantity}</p>
+                      <li key={item.id} className="flex items-start gap-3 py-3">
+                        {cart.status === 'active' ? (
+                          <button
+                            type="button"
+                            onClick={() => removeCartLine(item.instanceId ?? item.id, name)}
+                            aria-label={`Remove ${name} from cart`}
+                            className="inline-flex size-11 shrink-0 items-center justify-center rounded-control border border-border text-text-muted transition-colors hover:border-error hover:bg-error-soft hover:text-error focus:outline-none focus:ring-2 focus:ring-focus-ring motion-reduce:transition-none"
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                          </button>
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-baseline justify-between gap-3">
+                            <span className="truncate text-sm font-semibold text-text">{name}</span>
+                            <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-text">{money(item.unitPrice * item.quantity)}</span>
+                          </p>
+                          <p className="mt-0.5 text-xs text-text-muted">
+                            {product?.category ?? 'Marketplace item'} · {money(item.unitPrice)} each · Qty {item.quantity}
+                          </p>
+                        </div>
                       </li>
                     );
                   })}
                 </ul>
                 <div className="flex items-center justify-between border-t border-border py-3">
-                  <span className="text-sm font-semibold text-text">Estimated total</span>
+                  <span className="text-sm font-semibold text-text">{cart.status === 'checked_out' ? 'Order total' : 'Estimated total'}</span>
                   <span className="font-mono text-base font-semibold tabular-nums text-text">{money(cartTotal)}</span>
                 </div>
+                {cart.status === 'active' ? (
+                  <div className="flex flex-col gap-2 pb-2">
+                    <button
+                      type="button"
+                      onClick={checkout}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus:outline-none focus:ring-2 focus:ring-focus-ring focus:ring-offset-2 motion-reduce:transition-none"
+                    >
+                      <CreditCard className="size-4" aria-hidden="true" />
+                      Checkout {money(cartTotal)}
+                    </button>
+                    <p className="text-center text-xs leading-5 text-text-muted">
+                      Mock checkout — no real payment happens.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="pb-2">
+                    <button
+                      type="button"
+                      onClick={startNewCart}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control border border-border px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-focus-ring motion-reduce:transition-none"
+                    >
+                      <RotateCcw className="size-4" aria-hidden="true" />
+                      Start a new cart
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </section>

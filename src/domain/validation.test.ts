@@ -20,12 +20,13 @@ function placed(
   x: number,
   z: number,
   rotation = 0,
+  y = 0,
 ): PlacedFurniture {
   const product = PRODUCTS.find((entry) => entry.id === productId);
   return {
     instanceId,
     productId,
-    position: { x, y: 0, z },
+    position: { x, y, z },
     rotation,
     locked: false,
     source: 'marketplace',
@@ -74,11 +75,13 @@ describe('checkLayout furniture overlap', () => {
 });
 
 describe('checkLayout opening clearance', () => {
-  it('reports an item blocking the east window clearance', () => {
+  it('reports an item whose vertical band crosses the window', () => {
     // Pixel Cube Side Table (0.4 × 0.4) at the window-side zone's east end:
     // the footprint x ∈ [2.55, 2.95] cuts 0.05 m into the east window's
     // clearance (x ∈ [2.9, 3.1]) without crossing the east wall at x = 3.
-    const table = placed('table-window', 'pixel-cube-side-table', 2.75, -0.2);
+    // Raised to 0.6 m (top 1.05 m) so its band overlaps the window band
+    // (sill 0.9 m to 2.3 m): the table genuinely covers the glass.
+    const table = placed('table-window', 'pixel-cube-side-table', 2.75, -0.2, 0, 0.6);
     const result = checkLayout(DEFAULT_ROOM, [table]);
 
     expect(result.valid).toBe(false);
@@ -89,6 +92,15 @@ describe('checkLayout opening clearance', () => {
       instanceIds: ['table-window'],
       refId: EAST_WINDOW.id,
     });
+  });
+
+  it('ignores a low piece whose top stays below the window sill', () => {
+    // Same footprint as above, but resting on the floor: the table is only
+    // 0.45 m tall while the window sill sits at 0.9 m, so nothing blocks.
+    const table = placed('table-low-window', 'pixel-cube-side-table', 2.75, -0.2);
+    const result = checkLayout(DEFAULT_ROOM, [table]);
+    expect(result.valid).toBe(true);
+    expect(result.issues).toHaveLength(0);
   });
 
   it('reports an item blocking the balcony door clearance', () => {
@@ -126,5 +138,50 @@ describe('checkLayout opening clearance', () => {
       instanceIds: ['console-entry'],
       refId: ENTRY_DOOR.id,
     });
+  });
+});
+
+
+describe('checkLayout height bounds and vertical bands', () => {
+  it('flags a piece whose top crosses the ceiling as height_bounds', () => {
+    // Aria 55" OLED TV (0.79 m tall) hung with its base at 2.1 m: top 2.89 m > 2.8 m.
+    const tv = placed('tv-high', 'aria-55-oled-tv', -0.1, -2.0, 0, 2.1);
+    const result = checkLayout(DEFAULT_ROOM, [tv]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((issue) => issue.kind === 'height_bounds' && issue.instanceIds[0] === 'tv-high')).toBe(true);
+  });
+
+  it('allows a wall-mounted TV below the ceiling (top above floor, under 2.8 m)', () => {
+    // Aria TV base at 1.4 m: top 2.19 m stays under the 2.8 m ceiling. The
+    // TV footprint overlaps the media-wall zone only, so no other issues.
+    const tv = placed('tv-hung', 'aria-55-oled-tv', -0.1, -2.0, 0, 1.4);
+    const result = checkLayout(DEFAULT_ROOM, [tv]);
+    expect(result.valid).toBe(true);
+    expect(result.issues.some((issue) => issue.kind === 'height_bounds')).toBe(false);
+  });
+
+  it('does not report furniture overlap between vertically separated pieces', () => {
+    // Vello Sofa (0.82 tall) with the coffee table raised to 1.5 m above it:
+    // footprints overlap, vertical bands do not.
+    const sofa = placed('sofa-v', 'vello-3-seat-sofa', 0, 0.2);
+    const table = placed('table-v', 'budget-rescue-table-premium', 0, 0.6, 0, 1.5);
+    const result = checkLayout(DEFAULT_ROOM, [sofa, table]);
+    expect(result.valid).toBe(true);
+    expect(result.issues.some((issue) => issue.kind === 'overlap')).toBe(false);
+  });
+
+  it('still reports overlap when vertical bands intersect', () => {
+    // Same pair, but the table rests at 0.35 m: bands overlap, warning stands.
+    const sofa = placed('sofa-v2', 'vello-3-seat-sofa', 0, 0.2);
+    const table = placed('table-v2', 'budget-rescue-table-premium', 0, 0.6, 0, 0.35);
+    const result = checkLayout(DEFAULT_ROOM, [sofa, table]);
+    expect(result.issues.some((issue) => issue.kind === 'overlap')).toBe(true);
+  });
+
+  it('keeps door clearances blocked for floor and raised pieces alike', () => {
+    // A raised Soho Console still overlaps the full-height doorway band.
+    const console = placed('console-entry-v', 'soho-console', -2.8, -0.05, 90, 0.5);
+    const result = checkLayout(DEFAULT_ROOM, [console]);
+    expect(result.issues.some((issue) => issue.kind === 'blocks_opening' && issue.refId === ENTRY_DOOR.id)).toBe(true);
   });
 });

@@ -38,12 +38,17 @@ import type {
   ActivityEntry,
   CameraMode,
   Cart,
+  CheckoutResult,
   DesignSnapshot,
   FurnitureCategory,
   FurnitureProduct,
+  FurnitureSource,
   PlacedFurniture,
   PriceSummary,
   RoomAppearance,
+  RoomOpening,
+  RoomOpeningKind,
+  WallSide,
   RoomData,
   RoomDimensions,
   SearchProductsArgs,
@@ -260,6 +265,16 @@ export interface RoomStore {
     rotation: number,
     origin?: ActionOrigin,
   ) => SerializableResult<placement.PlacementMutationResult>;
+  /**
+   * Set how high a placed item's base sits above the floor (meters).
+   * Raising a piece lifts it off the floor so TVs, wall art, and shelves
+   * hang at a chosen height; validation flags tops that cross the ceiling.
+   */
+  setItemElevation: (
+    instanceId: string,
+    y: number,
+    origin?: ActionOrigin,
+  ) => SerializableResult<placement.PlacementMutationResult>;
   /** Remove a placed item; locked items cannot be removed. */
   removeProduct: (
     instanceId: string,
@@ -269,6 +284,16 @@ export interface RoomStore {
   setItemLocked: (
     instanceId: string,
     locked: boolean,
+    origin?: ActionOrigin,
+  ) => SerializableResult<placement.PlacementMutationResult>;
+  /**
+   * Re-tag a placed item's provenance: 'existing' (already owned, never
+   * counted toward the budget) or 'marketplace' (new purchase, counted).
+   * Recomputes pricing and validation in the same write.
+   */
+  setItemSource: (
+    instanceId: string,
+    source: FurnitureSource,
     origin?: ActionOrigin,
   ) => SerializableResult<placement.PlacementMutationResult>;
   /** Upload a user GLB model into the room (session-local; see {@link UserModelItem}). */
@@ -303,6 +328,42 @@ export interface RoomStore {
     dimensions: RoomDimensions,
     origin?: ActionOrigin,
   ) => SerializableResult<roomResize.ResizeRoomResult>;
+  /**
+   * Move one door or window along its wall (clamped to the wall, refused
+   * when it would collide with another opening). Re-validates the layout
+   * in the same write, so pieces that start blocking the opening surface
+   * immediately.
+   */
+  setOpeningPosition: (
+    openingId: string,
+    alongCenter: number,
+    wall?: WallSide,
+    origin?: ActionOrigin,
+  ) => SerializableResult<roomResize.MoveOpeningResult>;
+  /**
+   * Add a standard door or window (see OPENING_PRESETS) to any wall. The id
+   * is minted deterministically; center defaults to the leftmost free span
+   * on the wall. Re-validates the layout in the same write.
+   */
+  addOpening: (
+    draft: { kind: RoomOpeningKind; wall: WallSide; center?: number },
+    origin?: ActionOrigin,
+  ) => SerializableResult<roomResize.OpeningMutationResult>;
+  /** Remove a door or window from the room; re-validates the layout. */
+  removeOpening: (
+    openingId: string,
+    origin?: ActionOrigin,
+  ) => SerializableResult<roomResize.OpeningMutationResult>;
+  /**
+   * Resize a door or window on its wall: along-wall width, height, and
+   * (windows only) sill height — the vertical placement of the opening.
+   * At least one dimension must be supplied; re-validates the layout.
+   */
+  setOpeningDimensions: (
+    openingId: string,
+    patch: roomResize.OpeningDimensionPatch,
+    origin?: ActionOrigin,
+  ) => SerializableResult<roomResize.OpeningMutationResult>;
   /** Apply a partial styling change to the room appearance (visual only; never touches pricing or layout). */
   setRoomAppearance: (
     patch: Partial<RoomAppearance>,
@@ -322,11 +383,43 @@ export interface RoomStore {
   loadBudgetRescue: (origin?: ActionOrigin) => SerializableResult<designs.RestoredDesign>;
   /** Add placed marketplace instances to the cart. */
   addToCart: (instanceIds: readonly string[], origin?: ActionOrigin) => SerializableResult<Cart>;
+  /**
+   * Remove the cart line for one placed instance (the furniture stays in
+   * the room and can be re-added later). Totals refresh in the same write.
+   */
+  removeCartItem: (instanceId: string, origin?: ActionOrigin) => SerializableResult<Cart>;
+  /**
+   * Complete a mock checkout: marks the cart checked out and returns a
+   * deterministic order summary (order id, total, completion time). No
+   * real payment — this is the demo boundary of the shopping story.
+   */
+  checkoutCart: () => SerializableResult<CheckoutResult>;
+  /** Start a fresh empty cart (restart after a mock checkout). */
+  clearCart: () => SerializableResult<Cart>;
 }
 
 /** Minted deterministic session identity: an id and its ISO timestamp. */
 function sessionMint(sequence: number, prefix: string): { id: string; timestamp: string } {
   return { id: `${prefix}-${sequence}`, timestamp: timestampFor(sequence) };
+}
+
+/** Opening kind label for feed messages: "window", "door", or "balcony door" (by id marker). */
+function openingKindLabel(opening: { id: string; kind: RoomOpeningKind }): string {
+  if (opening.kind === 'window') return 'window';
+  return opening.id.toLowerCase().includes('balcony') ? 'balcony door' : 'door';
+}
+
+/** Deterministic id for the next user-added opening (opening-1, opening-2, ...). */
+function nextOpeningId(openings: readonly RoomOpening[]): string {
+  let max = 0;
+  for (const opening of openings) {
+    if (!opening.id.startsWith('opening-')) continue;
+    const suffix = Number(opening.id.slice('opening-'.length));
+    if (Number.isFinite(suffix) && suffix > max) {
+      max = suffix;
+    }
+  }
+  return `opening-${max + 1}`;
 }
 
 export const useRoomStore = create<RoomStore>()((set, get) => {
@@ -600,6 +693,22 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
       return result;
     },
 
+    setItemElevation: (instanceId, y, origin = 'human') => {
+      const prev = get();
+      const previous = prev.furniture.find((item) => item.instanceId === instanceId);
+      const result = placement.setItemElevation(instanceId, prev.furniture, y);
+      if (!result.ok) return result;
+      if (previous?.position.y === y) return result; // no-op success: nothing changed
+      const item = result.data.item;
+      commit(prev, refreshDesign(prev.room, result.data.items, prev.budget), origin, {
+        type: 'item_elevation_changed',
+        message: `Set the height of “${productName(item.productId)}” to ${fmt(item.position.y)} m above the floor`,
+        instanceId,
+        productId: item.productId,
+      });
+      return result;
+    },
+
     removeProduct: (instanceId, origin = 'human') => {
       const prev = get();
       const result = placement.removeProduct(instanceId, prev.furniture);
@@ -628,6 +737,27 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
       commit(prev, refreshDesign(prev.room, result.data.items, prev.budget), origin, {
         type: locked ? 'item_locked' : 'item_unlocked',
         message: `${locked ? 'Locked' : 'Unlocked'} “${productName(item.productId)}”`,
+        instanceId,
+        productId: item.productId,
+      });
+      return result;
+    },
+
+    setItemSource: (instanceId, source, origin = 'human') => {
+      const prev = get();
+      const previous = prev.furniture.find((item) => item.instanceId === instanceId);
+      const result = placement.setItemSource(instanceId, prev.furniture, source);
+      if (!result.ok) return result;
+      if (previous?.source === source) return result; // no-op success: nothing changed
+      const item = result.data.item;
+      // Budget math is live: flipping an item's provenance re-prices the
+      // design and re-validates the budget in the same write.
+      commit(prev, refreshDesign(prev.room, result.data.items, prev.budget), origin, {
+        type: 'item_source_changed',
+        message:
+          source === 'existing'
+            ? `Marked \u201c${productName(item.productId)}\u201d as an existing owned piece; it no longer counts toward the budget`
+            : `Marked \u201c${productName(item.productId)}\u201d as a marketplace purchase; it now counts toward the budget`,
         instanceId,
         productId: item.productId,
       });
@@ -815,6 +945,68 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
       return result;
     },
 
+    setOpeningPosition: (openingId, alongCenter, wall, origin = 'human') => {
+      const prev = get();
+      const result = roomResize.moveOpening(prev.room, openingId, alongCenter, wall);
+      if (!result.ok) return result;
+      if (!result.data.changed) return result; // no-op success: nothing changed
+      const previous = prev.room.openings.find((opening) => opening.id === openingId);
+      const moved = result.data.opening;
+      const along = fmt(roomResize.openingAlongWallCenter(moved));
+      const sameWall = previous === undefined || previous.wall === moved.wall;
+      commit(prev, refreshDesign(result.data.room, prev.furniture, prev.budget), origin, {
+        type: 'opening_moved',
+        message: sameWall
+          ? `Moved the ${openingKindLabel(moved)} \u201c${moved.id}\u201d along the ${moved.wall} wall to ${along} m`
+          : `Relocated the ${openingKindLabel(moved)} \u201c${moved.id}\u201d to the ${moved.wall} wall at ${along} m`,
+      });
+      return result;
+    },
+
+    addOpening: (draft, origin = 'human') => {
+      const prev = get();
+      const result = roomResize.addOpening(prev.room, draft, nextOpeningId(prev.room.openings));
+      if (!result.ok) return result;
+      const added = result.data.opening;
+      commit(prev, refreshDesign(result.data.room, prev.furniture, prev.budget), origin, {
+        type: 'opening_added',
+        message: `Added a ${openingKindLabel(added)} \u201c${added.id}\u201d on the ${added.wall} wall (${fmt(
+          roomResize.openingAlongWallSize(added),
+        )} m wide)`,
+      });
+      return result;
+    },
+
+    removeOpening: (openingId, origin = 'human') => {
+      const prev = get();
+      const result = roomResize.removeOpening(prev.room, openingId);
+      if (!result.ok) return result;
+      const removed = result.data.opening;
+      commit(prev, refreshDesign(result.data.room, prev.furniture, prev.budget), origin, {
+        type: 'opening_removed',
+        message: `Removed the ${openingKindLabel(removed)} \u201c${removed.id}\u201d from the room`,
+      });
+      return result;
+    },
+
+    setOpeningDimensions: (openingId, patch, origin = 'human') => {
+      const prev = get();
+      const result = roomResize.setOpeningDimensions(prev.room, openingId, patch);
+      if (!result.ok) return result;
+      if (!result.data.changed) return result; // no-op success: nothing changed
+      const resized = result.data.opening;
+      const along = roomResize.openingAlongWallSize(resized);
+      const sillNote =
+        resized.kind === 'window' ? `, sill ${fmt(resized.sillHeight)} m` : '';
+      commit(prev, refreshDesign(result.data.room, prev.furniture, prev.budget), origin, {
+        type: 'opening_resized',
+        message: `Resized the ${openingKindLabel(resized)} \u201c${resized.id}\u201d to ${fmt(
+          along,
+        )} m wide \u00d7 ${fmt(resized.height)} m tall${sillNote}`,
+      });
+      return result;
+    },
+
     setRoomAppearance: (patch, origin = 'human') => {
       const prev = get();
       const result = appearance.updateRoomAppearance(prev.roomAppearance, patch);
@@ -940,6 +1132,68 @@ export const useRoomStore = create<RoomStore>()((set, get) => {
         updates.sessionSequence = sequence + 1;
       }
       set({ ...updates, lastMutation: prev.lastMutation + 1 });
+      return result;
+    },
+
+    removeCartItem: (instanceId, origin = 'human') => {
+      const prev = get();
+      const previousLine = prev.cart.items.find((line) => line.instanceId === instanceId);
+      const sequence = prev.sessionSequence + 1;
+      const result = cart.removeCartItem(prev.cart, instanceId, timestampFor(sequence));
+      if (!result.ok) return result;
+      const updates: Partial<RoomStore> = {
+        cart: result.data,
+        sessionSequence: sequence,
+      };
+      if (origin === 'agent' && previousLine !== undefined) {
+        const mint = sessionMint(sequence + 1, 'activity');
+        updates.activity = activity.appendActivity(
+          prev.activity,
+          activity.createActivityEntry({
+            id: mint.id,
+            timestamp: mint.timestamp,
+            type: 'cart_item_removed',
+            message: `Removed \u201c${productName(previousLine.productId)}\u201d from the cart`,
+            instanceId,
+            productId: previousLine.productId,
+          }),
+        );
+        updates.sessionSequence = sequence + 1;
+      }
+      set({ ...updates, lastMutation: prev.lastMutation + 1 });
+      return result;
+    },
+
+    checkoutCart: () => {
+      const prev = get();
+      const sequence = prev.sessionSequence + 1;
+      const mint = sessionMint(sequence, 'order');
+      const result = cart.checkoutCart(prev.cart, {
+        orderId: mint.id,
+        timestamp: mint.timestamp,
+      });
+      if (!result.ok) return result;
+      set({
+        cart: result.data.cart,
+        sessionSequence: sequence,
+        lastMutation: prev.lastMutation + 1,
+      });
+      return result;
+    },
+
+    clearCart: () => {
+      const prev = get();
+      if (prev.cart.items.length === 0 && prev.cart.status === 'active') {
+        return { ok: true, data: prev.cart }; // no-op success: nothing to clear
+      }
+      const sequence = prev.sessionSequence + 1;
+      const result = cart.clearCart(prev.cart, timestampFor(sequence));
+      if (!result.ok) return result;
+      set({
+        cart: result.data,
+        sessionSequence: sequence,
+        lastMutation: prev.lastMutation + 1,
+      });
       return result;
     },
   };

@@ -45,7 +45,7 @@ src/
     three/              React Three Fiber scene (see §8)
   data/
     appIdentity.ts      Public app name, tagline, and metadata description
-    products.ts         79 hand-authored products (one GLB-backed), lists; optional modelUri/modelYaw fields
+    products.ts         88 hand-authored products (one GLB-backed, incl. TVs/sound bars/speakers), lists; optional modelUri/modelYaw fields
     appearance.ts       Room styling registry: wall/floor/wallpaper options,
                         furniture color-to-hex map, appearance previews
     placementZones.ts   10 named zones with footprints, categories, hints
@@ -63,7 +63,7 @@ src/
     appearance.ts       Room appearance updates (visual-only styling state)
     cart.ts             Marketplace-only cart rules
     activity.ts         Activity feed model: types, templates, bounds
-    *.test.ts           Colocated Vitest suites (8 files, 66 tests)
+    *.test.ts           Colocated Vitest suites (9 files, 131 tests)
   store/
     roomStore.ts        The Zustand store: state, actions, commit pipeline
     selectors.ts        Stable derived selectors (selected item, totals, …)
@@ -73,8 +73,8 @@ src/
     serialize.ts        Result envelopes, read helpers, argument parsing
     sceneSnapshot.ts    On-demand JPEG capture of the live 3D canvas
                         (backs the render_scene_snapshot read tool)
-    tools/readTools.ts      10 read tools (incl. render_scene_snapshot)
-    tools/mutationTools.ts  12 mutation tools
+    tools/readTools.ts      11 read tools (incl. get_planner_guide, render_scene_snapshot)
+    tools/mutationTools.ts  19 mutation tools
 ```
 
 ## 3. Data model (`src/domain/types.ts`)
@@ -190,7 +190,8 @@ warnings inform but do not invalidate.
   `replaceProduct`, `setBudget`, `setRoomAppearance` (partial visual patch),
   `setRoomDimensions` (resize to real meters; rebuilds openings/zones, never
   moves furniture), `saveDesign`, `loadDesign`, `resetToDefault`,
-  `loadBudgetRescue`, `addToCart`.
+  `loadBudgetRescue`, `addToCart`, `checkoutCart` (mock checkout with a
+  deterministic order id), `clearCart` (start a fresh empty cart).
 
 Every mutation follows the same pipeline:
 
@@ -226,7 +227,7 @@ read tools log *that a read happened*, never the query text.
 | --- | --- |
 | `catalog.ts` | Product lookup; `searchProducts` with free-text + category/style/color/material/price filters, dimension windows, deterministic sort, paging; stock awareness. |
 | `placement.ts` | Zone discovery for a category, zone fit preview, zone placement (centers item in zone footprint, enforces category/capacity/bounds), explicit x/z placement, move/rotate/remove/replace with lock rules, variant resolution/validation (`invalid_variant`) with keep-or-reset color on replacement. |
-| `resize.ts` | Room resizing within supported ranges (`invalid_room_size`): proportional opening rescale per wall (clamped, ceiling-capped, removed when a wall is too short) and zone rescaling with unusable-zone drops; furniture untouched. |
+| `resize.ts` | Room resizing within supported ranges (`invalid_room_size`): proportional opening rescale per wall (clamped, ceiling-capped, removed when a wall is too short) and zone rescaling with unusable-zone drops; furniture untouched. Opening placement: `moveOpening` (slide along a wall or relocate onto any other wall, clamped, refused on collisions), `addOpening` (standard door/window presets from `OPENING_PRESETS` on any wall, auto-centering on the leftmost free span, height-capped below the ceiling), and `removeOpening`; stable codes `opening_not_found`, `opening_overlap`, `invalid_opening_position`, `duplicate_opening_id`. |
 | `validation.ts` | Runs the issue checks from §3 in fixed order against room, furniture, and budget. |
 | `pricing.ts` | Marketplace-only totals (`newTotal` vs existing/grand), signed remaining, `getBudgetPressure` (under/at/over status + replaceable items most-expensive-first). |
 | `alternatives.ts` | For one placed marketplace item: cheaper same-category in-stock candidates ranked by style/color/material/dimension compatibility then savings; `totalSavings`. |
@@ -275,16 +276,27 @@ mounts exactly once inside the shell.
 - **RoomSizePanel** — real-size room shell editor: width/depth/height in
   meters within the domain ranges (see `resize.ts`), live floor area readout,
   and a reset to the demo size. Applies through `setRoomDimensions` and
-  announces removed openings and pieces left outside the new walls. The stage
-  overlay shows the live dimensions pill (`RoomSizeSummary`) with the finish
-  chips.
+  announces removed openings and pieces left outside the new walls. The same
+  scroll surface hosts the **Doors & windows** editor (`OpeningsEditor`):
+  every opening lists its wall, its movable range, a numeric center input,
+  and ±0.5 m nudges routed through `setOpeningPosition` (which also accepts
+  a target wall to relocate the opening anywhere), plus per-row removal and
+  an add form (`addOpening`) that drops a standard door or window onto the
+  first free span of any wall, so the 3D scene and clearance validation
+  update in the same write. The stage overlay shows the
+  live dimensions pill (`RoomSizeSummary`) with the finish chips.
 - **FurnitureInspector** — placed-items list + selected-piece editor
   (position form, rotation steps, lock/unlock, remove, per-item validation
-  issues) in a single internal scroll region; the polite status footer stays
-  pinned below the scroll area.
+  issues) in a single internal scroll region; an **Ownership** toggle
+  re-tags any piece (seeded "existing" furniture included) as already owned
+  or a new marketplace purchase via `setItemSource`, re-pricing and
+  re-validating the budget instantly. The polite status footer stays pinned
+  below the scroll area.
 - **DesignCartPanel** — `designs`: name + save, saved list with Load,
   Reset room (two-step confirm), Load Budget Rescue; `cart`: add-all
-  available, line list with totals. Flat divided rows; status messages are
+  available, per-line remove, mock **Checkout** (marks the cart checked
+  out with a deterministic order summary; no real payment) and a
+  "Start a new cart" restart after checkout. Flat divided rows; status messages are
   polite `role="status"` regions.
 - **AgentActivityFeed** — newest-six of the bounded feed, fixed-template
   messages, monetary amounts only for money event types, polite
@@ -369,8 +381,10 @@ keyboard-accessible control outside the canvas.
 
 See `docs/WEBMCP.md` for the full protocol spec. In brief: `WebMcpProvider`
 calls `registerRoomTools()` in an effect, feature-detects
-`document.modelContext ?? navigator.modelContext`, registers 22 tools (10
-reads, 12 mutations — including `resize_room` and
+`document.modelContext ?? navigator.modelContext`, registers 30 tools (11
+reads, 19 mutations — including the `get_planner_guide` orientation read,
+`resize_room`, `move_opening`/`add_opening`/`remove_opening`/`resize_opening`,
+`set_item_source`, `set_item_elevation`, `remove_cart_item`, and
 `render_scene_snapshot`) with JSON schemas and
 safety annotations, and unregisters on cleanup (Strict Mode safe). Tools call
 the same store actions as the UI with `origin: 'agent'` and return

@@ -101,6 +101,14 @@ export function footprintFor(
   return { x: item.position.x, z: item.position.z, width: ext.width, depth: ext.depth };
 }
 
+/** True when two vertical bands [a0, a1] and [b0, b1] (meters above floor)
+ * overlap by more than zero; bands that merely touch do not overlap.
+ * Floor-anchored furniture spans [0, height]; elevated pieces span
+ * [y, y + height]; openings span [sillHeight, sillHeight + height]. */
+export function verticalBandsOverlap(a0: number, a1: number, b0: number, b1: number): boolean {
+  return a0 < b1 && b0 < a1;
+}
+
 /** Overlap area of two axis-aligned footprints in m²; 0 when disjoint. */
 export function overlapArea(a: RectFootprint, b: RectFootprint): number {
   const ox =
@@ -138,6 +146,8 @@ interface ItemInfo {
   product?: FurnitureProduct;
   /** rotated footprint; undefined while the product is unknown */
   footprint?: RectFootprint;
+  /** vertical band above the floor [itemY, itemY + productHeight] */
+  band?: { bottom: number; top: number };
   /** display label: product name, or the raw product id when unknown */
   name: string;
 }
@@ -201,6 +211,10 @@ export function checkLayout(
       item,
       product,
       footprint: product ? footprintFor(item, product) : undefined,
+      band:
+        product !== undefined
+          ? { bottom: item.position.y, top: item.position.y + product.height }
+          : undefined,
       name: product ? product.name : item.productId,
     });
   }
@@ -227,6 +241,31 @@ export function checkLayout(
     }
   }
 
+  // 1b. Height bounds (error): the piece must rest on/above the floor and
+  //     its top must stay below the ceiling.
+  for (const entry of info) {
+    const { item, band, name } = entry;
+    if (!band) continue;
+    if (band.bottom < -1e-9) {
+      issues.push({
+        kind: 'height_bounds',
+        severity: 'error',
+        message: `\u201c${name}\u201d sits below the floor (base ${band.bottom.toFixed(2)} m)`,
+        instanceIds: [item.instanceId],
+      });
+      continue;
+    }
+    const ceiling = room.dimensions.height;
+    if (band.top > ceiling + 1e-9) {
+      issues.push({
+        kind: 'height_bounds',
+        severity: 'error',
+        message: `\u201c${name}\u201d extends above the ceiling (top ${band.top.toFixed(2)} m > ${ceiling.toFixed(2)} m)`,
+        instanceIds: [item.instanceId],
+      });
+    }
+  }
+
   // 2. Furniture collisions (warning): significant overlaps between hard
   //    items; rug/curtain/decor/plant never block.
   for (let i = 0; i < info.length; i++) {
@@ -236,7 +275,11 @@ export function checkLayout(
       const b = info[j];
       if (!b.footprint || !b.product || isSoftCategory(b.product.category)) continue;
       const area = overlapArea(a.footprint, b.footprint);
-      if (area > OVERLAP_TOLERANCE_M2) {
+      const sameBand =
+        a.band !== undefined &&
+        b.band !== undefined &&
+        verticalBandsOverlap(a.band.bottom, a.band.top, b.band.bottom, b.band.top);
+      if (area > OVERLAP_TOLERANCE_M2 && sameBand) {
         const region = intersection(a.footprint, b.footprint);
         if (region) {
           issues.push({
@@ -258,7 +301,15 @@ export function checkLayout(
     if (!footprint) continue;
     for (const opening of room.openings) {
       const area = overlapArea(footprint, opening.footprint);
-      if (area > 0) {
+      const clearsBand =
+        entry.band === undefined ||
+        verticalBandsOverlap(
+          entry.band.bottom,
+          entry.band.top,
+          opening.sillHeight,
+          opening.sillHeight + opening.height,
+        );
+      if (area > 0 && clearsBand) {
         const region = intersection(footprint, opening.footprint);
         if (region) {
           const label = isBalconyOpening(opening)

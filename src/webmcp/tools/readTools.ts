@@ -12,6 +12,7 @@
  */
 
 import { captureSceneSnapshot } from '@/webmcp/sceneSnapshot';
+import { PLANNER_GUIDE_DESCRIPTION, buildPlannerGuide } from '@/webmcp/plannerGuide';
 import { MAX_PAGE_SIZE } from '@/domain/catalog';
 import { ROOM_SIZE_LIMITS } from '@/domain/resize';
 import * as pricing from '@/domain/pricing';
@@ -720,6 +721,11 @@ function renderSceneSnapshotTool(): ModelContextTool {
     },
   );
 }
+/** Orient an agent on the site before it starts changing the room. */
+function getPlannerGuideTool(): ModelContextTool {
+  return readTool('get_planner_guide', PLANNER_GUIDE_DESCRIPTION, () => toolOk({ guide: buildPlannerGuide() }));
+}
+
 /**
  * The complete read-only WebMCP tool surface for the room editor.
  *
@@ -729,6 +735,7 @@ function renderSceneSnapshotTool(): ModelContextTool {
  */
 export function createReadTools(): readonly ModelContextTool[] {
   return [
+    getPlannerGuideTool(),
     getRoomStateTool(),
     getAvailablePlacementZonesTool(),
     searchProductsTool(),

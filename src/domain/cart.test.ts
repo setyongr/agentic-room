@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { addToCart } from './cart';
+import { addToCart, checkoutCart, clearCart, removeCartItem } from './cart';
 import { BUDGET_RESCUE_ITEMS, DEFAULT_ROOM_ITEMS } from '@/data/demoRoom';
 import { getProduct } from '@/data/products';
 import type { AddToCartMeta } from './cart';
@@ -205,5 +205,151 @@ describe('addToCart', () => {
         reason: 'missing_product',
       },
     ]);
+  });
+});
+
+
+describe('removeCartItem', () => {
+  /** Cart with the four Budget Rescue marketplace items, like the UI builds it. */
+  function fullCart(): Cart {
+    const requested = [
+      'rescue-coffee-table',
+      'rescue-floor-lamp',
+      'rescue-accent-chair',
+      'rescue-shelf',
+    ];
+    const result = addToCart(BASE_CART, requested, BUDGET_RESCUE_ITEMS, makeMeta());
+    if (!result.ok) throw new Error(`fixture cart failed: ${result.message}`);
+    return result.data;
+  }
+
+  it('removes one line and recalculates the total from the rest', () => {
+    const cart = fullCart();
+    const lampPrice = getProduct('budget-rescue-lamp-premium')?.price ?? 0;
+    const result = removeCartItem(cart, 'rescue-floor-lamp', SECOND_ADD_AT);
+    const updated = expectSuccess(result);
+
+    expect(updated.items).toHaveLength(3);
+    expect(updated.items.map((line) => line.instanceId)).toEqual([
+      'rescue-coffee-table',
+      'rescue-accent-chair',
+      'rescue-shelf',
+    ]);
+    // Ids and captured prices of the survivors are untouched.
+    expect(updated.items[0].id).toBe('line-rescue-coffee-table');
+    expect(updated.items[0].unitPrice).toBe(getProduct('budget-rescue-table-premium')!.price);
+    expect(updated.total).toBe(cart.total - lampPrice);
+    expect(updated.updatedAt).toBe(SECOND_ADD_AT);
+    // The input cart is not mutated.
+    expect(cart.items).toHaveLength(4);
+  });
+
+  it('supports removing lines until the cart is empty', () => {
+    let cart = fullCart();
+    for (const instanceId of ['rescue-coffee-table', 'rescue-floor-lamp', 'rescue-accent-chair', 'rescue-shelf']) {
+      const result = removeCartItem(cart, instanceId, SECOND_ADD_AT);
+      cart = expectSuccess(result);
+    }
+    expect(cart.items).toEqual([]);
+    expect(cart.total).toBe(0);
+  });
+
+  it('fails with cart_item_not_found for unknown instances, leaving the cart untouched', () => {
+    const cart = fullCart();
+    const error = expectRejected(removeCartItem(cart, 'ghost-instance', SECOND_ADD_AT));
+    expect(error.code).toBe('cart_item_not_found');
+    expect(error.details?.instanceId).toBe('ghost-instance');
+    expect(cart.items).toHaveLength(4);
+  });
+
+  it('rejects changes to a checked-out cart', () => {
+    const cart = fullCart();
+    const checkedOut: Cart = { ...cart, status: 'checked_out' };
+    const error = expectRejected(removeCartItem(checkedOut, 'rescue-shelf', SECOND_ADD_AT));
+    expect(error.code).toBe('cart_checked_out');
+  });
+
+  it('never mutates the caller cart', () => {
+    const cart = fullCart();
+    const snapshot = JSON.parse(JSON.stringify(cart)) as Cart;
+    removeCartItem(cart, 'rescue-shelf', SECOND_ADD_AT);
+    expect(cart).toEqual(snapshot);
+  });
+});
+
+
+describe('checkoutCart', () => {
+  /** Cart with the four Budget Rescue marketplace items. */
+  function fullCart(): Cart {
+    const requested = [
+      'rescue-coffee-table',
+      'rescue-floor-lamp',
+      'rescue-accent-chair',
+      'rescue-shelf',
+    ];
+    const result = addToCart(BASE_CART, requested, BUDGET_RESCUE_ITEMS, makeMeta());
+    if (!result.ok) throw new Error(`fixture cart failed: ${result.message}`);
+    return result.data;
+  }
+
+  it('marks the cart checked out and returns a deterministic order summary', () => {
+    const cart = fullCart();
+    const order = expectSuccess(
+      checkoutCart(cart, { orderId: 'order-7', timestamp: SECOND_ADD_AT }),
+    );
+    expect(order.orderId).toBe('order-7');
+    expect(order.total).toBe(cart.total);
+    expect(order.completedAt).toBe(SECOND_ADD_AT);
+    expect(order.cart.status).toBe('checked_out');
+    expect(order.cart.items).toHaveLength(4); // lines kept for reference
+    expect(order.cart.updatedAt).toBe(SECOND_ADD_AT);
+    // The input cart is untouched.
+    expect(cart.status).toBe('active');
+  });
+
+  it('rejects checking out an empty cart with cart_empty', () => {
+    const error = expectRejected(
+      checkoutCart(BASE_CART, { orderId: 'order-1', timestamp: SECOND_ADD_AT }),
+    );
+    expect(error.code).toBe('cart_empty');
+  });
+
+  it('rejects a second checkout with cart_checked_out', () => {
+    const cart = fullCart();
+    const first = expectSuccess(
+      checkoutCart(cart, { orderId: 'order-1', timestamp: SECOND_ADD_AT }),
+    );
+    const error = expectRejected(
+      checkoutCart(first.cart, { orderId: 'order-2', timestamp: SECOND_ADD_AT }),
+    );
+    expect(error.code).toBe('cart_checked_out');
+  });
+});
+
+describe('clearCart', () => {
+  it('restarts a checked-out cart as empty and active', () => {
+    const cart = (() => { const r = addToCart(BASE_CART, ['rescue-coffee-table', 'rescue-floor-lamp', 'rescue-accent-chair', 'rescue-shelf'], BUDGET_RESCUE_ITEMS, makeMeta()); if (!r.ok) throw new Error(r.message); return r.data; })();
+    const first = expectSuccess(
+      checkoutCart(cart, { orderId: 'order-3', timestamp: SECOND_ADD_AT }),
+    );
+    const fresh = expectSuccess(clearCart(first.cart, '2026-09-02T12:00:00.000Z'));
+    expect(fresh.status).toBe('active');
+    expect(fresh.items).toEqual([]);
+    expect(fresh.total).toBe(0);
+    expect(fresh.updatedAt).toBe('2026-09-02T12:00:00.000Z');
+  });
+
+  it('works from an active cart too and never mutates the input', () => {
+    const cart = (() => { const r = addToCart(BASE_CART, ['rescue-coffee-table', 'rescue-floor-lamp', 'rescue-accent-chair', 'rescue-shelf'], BUDGET_RESCUE_ITEMS, makeMeta()); if (!r.ok) throw new Error(r.message); return r.data; })();
+    const snapshot = JSON.parse(JSON.stringify(cart)) as Cart;
+    const fresh = expectSuccess(clearCart(cart, '2026-09-02T12:00:00.000Z'));
+    expect(fresh.items).toEqual([]);
+    expect(cart).toEqual(snapshot);
+  });
+
+  it('resets an already-empty cart harmlessly', () => {
+    const fresh = expectSuccess(clearCart(BASE_CART, '2026-09-02T12:00:00.000Z'));
+    expect(fresh.status).toBe('active');
+    expect(fresh.items).toEqual([]);
   });
 });

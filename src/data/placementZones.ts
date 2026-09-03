@@ -85,10 +85,10 @@ export const PLACEMENT_ZONES: readonly RankedPlacementZone[] = [
     kind: 'media',
     name: 'Media Wall',
     footprint: { x: -0.1, z: -2.0, width: 3.2, depth: 0.5 },
-    allowedCategories: ['cabinet', 'shelf', 'storage', 'decor', 'plant'],
+    allowedCategories: ['cabinet', 'shelf', 'storage', 'decor', 'plant', 'tv', 'soundbar', 'speaker'],
     maxItems: 4,
     rank: 3,
-    hint: 'Center the console on the north wall; flank it with shelves, decor, or plants.',
+    hint: 'Center the TV and console on the north wall; flank them with speakers, shelves, decor, or plants.',
   },
   {
     id: 'center-table',

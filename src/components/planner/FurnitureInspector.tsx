@@ -6,12 +6,16 @@ import {
   Box,
   LockKeyhole,
   MoveHorizontal,
+  MoveVertical,
   RotateCw,
+  ShoppingBag,
+  Tag,
   Trash2,
   UnlockKeyhole,
 } from 'lucide-react';
 
 import { furnitureHex } from '@/data/appearance';
+import type { FurnitureSource } from '@/domain/types';
 import { selectSelectedItem, selectSelectedProduct } from '@/store/selectors';
 import { useRoomStore } from '@/store/roomStore';
 import { useModelThumbnail } from '@/components/three/modelThumbnail';
@@ -39,6 +43,8 @@ export function FurnitureInspector() {
   const rotateProduct = useRoomStore((state) => state.rotateProduct);
   const removeProduct = useRoomStore((state) => state.removeProduct);
   const setItemLocked = useRoomStore((state) => state.setItemLocked);
+  const setItemSource = useRoomStore((state) => state.setItemSource);
+  const setItemElevation = useRoomStore((state) => state.setItemElevation);
   const userModels = useRoomStore((state) => state.userModels);
   const selectedUserModelId = useRoomStore((state) => state.selectedUserModelId);
   const selectUserModel = useRoomStore((state) => state.selectUserModel);
@@ -49,6 +55,7 @@ export function FurnitureInspector() {
   const selectedUserModel = userModels.find((m) => m.id === selectedUserModelId);
   const [x, setX] = useState('');
   const [z, setZ] = useState('');
+  const [y, setY] = useState('');
   const [umX, setUmX] = useState('');
   const [umZ, setUmZ] = useState('');
   const [message, setMessage] = useState('');
@@ -57,11 +64,13 @@ export function FurnitureInspector() {
     if (!selectedItem) {
       setX('');
       setZ('');
+      setY('');
       return;
     }
 
     setX(coordinate(selectedItem.position.x));
     setZ(coordinate(selectedItem.position.z));
+    setY(coordinate(selectedItem.position.y));
   }, [selectedItem]);
 
   // Uploaded-model state sync: mirror the selected model's coordinates into the form.
@@ -155,6 +164,30 @@ export function FurnitureInspector() {
     announce(`Moved ${selectedProduct?.name ?? 'item'} to X ${coordinate(nextX)}, Z ${coordinate(nextZ)}.`, 'success');
   };
 
+  const setHeight = (nextY: number) => {
+    if (!selectedItem) return;
+    const result = setItemElevation(selectedItem.instanceId, nextY, 'human');
+    if (!result.ok) {
+      announce(result.message, 'error');
+      return;
+    }
+    announce(
+      `Height of ${selectedProduct?.name ?? 'item'} set to ${coordinate(nextY)} m above the floor.`,
+      'success',
+    );
+  };
+
+  const applyHeight = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedItem) return;
+    const nextY = Number(y);
+    if (y.trim() === '' || !Number.isFinite(nextY) || nextY < 0) {
+      announce('Enter a height of 0 m or more before applying.', 'error');
+      return;
+    }
+    setHeight(nextY);
+  };
+
   const rotate = (degrees: number) => {
     if (!selectedItem) return;
 
@@ -194,6 +227,22 @@ export function FurnitureInspector() {
     }
 
     announce(`Removed ${selectedProduct?.name ?? 'item'} from the room.`, 'success');
+  };
+
+  const changeSource = (source: FurnitureSource) => {
+    if (!selectedItem) return;
+    const name = selectedProduct?.name ?? 'item';
+    const result = setItemSource(selectedItem.instanceId, source);
+    if (!result.ok) {
+      announce(result.message, 'error');
+      return;
+    }
+    announce(
+      source === 'existing'
+        ? `“${name}” is now an existing owned piece — it no longer counts toward the budget.`
+        : `“${name}” is now a marketplace purchase — it counts toward the budget.`,
+      'success',
+    );
   };
 
   const selectedIssues = selectedItem
@@ -372,9 +421,10 @@ export function FurnitureInspector() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-text-muted">X / Z</dt>
+                  <dt className="text-text-muted">X / Y / Z</dt>
                   <dd className="mt-0.5 font-medium tabular-nums text-text">
-                    {coordinate(selectedItem.position.x)} / {coordinate(selectedItem.position.z)} m
+                    {coordinate(selectedItem.position.x)} / {coordinate(selectedItem.position.y)} /{' '}
+                    {coordinate(selectedItem.position.z)} m
                   </dd>
                 </div>
                 <div>
@@ -383,6 +433,42 @@ export function FurnitureInspector() {
                 </div>
               </dl>
             </div>
+
+            <section className="border-t pt-4" aria-labelledby="ownership-title">
+              <h4 id="ownership-title" className="text-small font-semibold text-text">Ownership</h4>
+              <p className="mt-1 text-xs leading-5 text-text-muted">
+                Existing pieces are already owned and never count toward your budget; marketplace
+                pieces are new purchases that do. Changing ownership updates the budget instantly.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label="Ownership for the selected piece">
+                <button
+                  type="button"
+                  aria-pressed={selectedItem.source === 'existing'}
+                  onClick={() => changeSource('existing')}
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border px-2 text-small font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
+                    selectedItem.source === 'existing'
+                      ? 'border-accent bg-accent-soft text-accent-strong'
+                      : 'border-border bg-surface-raised text-text hover:bg-surface-muted'
+                  }`}
+                >
+                  <Tag className="size-4 shrink-0" aria-hidden="true" />
+                  Already owned
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={selectedItem.source === 'marketplace'}
+                  onClick={() => changeSource('marketplace')}
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border px-2 text-small font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
+                    selectedItem.source === 'marketplace'
+                      ? 'border-accent bg-accent-soft text-accent-strong'
+                      : 'border-border bg-surface-raised text-text hover:bg-surface-muted'
+                  }`}
+                >
+                  <ShoppingBag className="size-4 shrink-0" aria-hidden="true" />
+                  Buy new
+                </button>
+              </div>
+            </section>
 
             <form onSubmit={applyMove} className="border-t pt-4" aria-labelledby="position-controls-title">
               <h4 id="position-controls-title" className="text-small font-semibold text-text">Position</h4>
@@ -419,6 +505,53 @@ export function FurnitureInspector() {
                 <MoveHorizontal className="size-4" aria-hidden="true" />
                 Apply move
               </button>
+            </form>
+
+            <form onSubmit={applyHeight} className="border-t pt-4" aria-labelledby="height-controls-title">
+              <h4 id="height-controls-title" className="text-small font-semibold text-text">Height above floor</h4>
+              <p className="mt-1 text-xs leading-5 text-text-muted">
+                Set how high the piece sits off the floor — raise TVs, wall art, and shelves to hang
+                them. The top of the piece must stay below the ceiling.
+              </p>
+              <div className="mt-3 flex items-end gap-2">
+                <label className="grid min-w-0 flex-1 gap-1.5 text-small font-medium text-text" htmlFor="furniture-y-coordinate">
+                  Height (m)
+                  <input
+                    id="furniture-y-coordinate"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.05"
+                    min="0"
+                    value={y}
+                    onChange={(event) => setY(event.target.value)}
+                    className="min-h-11 w-full rounded-control border bg-surface-raised px-3 tabular-nums text-text shadow-none outline-none transition-colors placeholder:text-text-faint focus:border-accent motion-reduce:transition-none"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control bg-accent px-3 text-small font-semibold text-on-accent transition-colors hover:bg-accent-strong motion-reduce:transition-none"
+                >
+                  <MoveVertical className="size-4" aria-hidden="true" />
+                  Apply
+                </button>
+              </div>
+              <div className="mt-2 flex gap-2">
+                {[0, 0.45, 1.2].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setHeight(preset)}
+                    aria-label={`Set height to ${preset === 0 ? '0 meters, on the floor' : `${preset} meters`}`}
+                    className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-control border px-2 text-xs font-semibold transition-colors motion-reduce:transition-none ${
+                      Math.abs((selectedItem?.position.y ?? 0) - preset) < 0.001
+                        ? 'border-accent bg-accent-soft text-accent-strong'
+                        : 'border-border bg-surface-raised text-text hover:bg-surface-muted'
+                    }`}
+                  >
+                    {preset === 0 ? 'Floor 0 m' : `${preset} m`}
+                  </button>
+                ))}
+              </div>
             </form>
 
             <section className="border-t pt-4" aria-labelledby="rotation-controls-title">

@@ -20,7 +20,7 @@
  *   missing_product / out_of_stock / zone_not_found / zone_mismatch /
  *   zone_full / does_not_fit / missing_position / conflicting_options /
  *   duplicate_instance_id / item_not_found / item_locked / category_mismatch
- *   / invalid_variant
+ *   / invalid_variant / invalid_source / invalid_elevation
  */
 
 import { PRODUCTS } from '@/data/products';
@@ -444,9 +444,11 @@ export function nextInstanceId(items: readonly PlacedFurniture[], productId: str
 }
 
 /**
- * Move an item to new x/z footprint-center coordinates at floor base
- * (y = 0). All other fields (instanceId, productId, rotation, locked,
- * source) are preserved. Locked items may be moved.
+ * Move an item to new x/z footprint-center coordinates. The item keeps its
+ * current elevation (`position.y`), so raised/wall-mounted pieces stay at
+ * their height when slid around the room. All other fields (instanceId,
+ * productId, rotation, locked, source) are preserved. Locked items may be
+ * moved.
  */
 export function moveProduct(
   instanceId: string,
@@ -464,7 +466,7 @@ export function moveProduct(
   const moved: PlacedFurniture = {
     instanceId: current.instanceId,
     productId: current.productId,
-    position: { x, y: 0, z },
+    position: { x, y: current.position.y, z },
     rotation: current.rotation,
     locked: current.locked,
     source: current.source,
@@ -473,6 +475,45 @@ export function moveProduct(
   const updated = items.slice();
   updated[index] = moved;
   return ok({ items: updated, item: moved });
+}
+
+/**
+ * Set how high an item's base sits above the floor (position.y, meters).
+ *
+ * Floor-anchored items sit at 0; raising a piece lifts it off the floor so
+ * TVs, wall art, and shelves can hang at a chosen height (the layout
+ * validation reports pieces whose top would cross the ceiling). All other
+ * fields are preserved, locked items included (elevation is a position
+ * property, like move/rotate). Non-finite or negative heights fail with
+ * `invalid_elevation`; setting the current height again is a no-op success.
+ */
+export function setItemElevation(
+  instanceId: string,
+  items: readonly PlacedFurniture[],
+  y: number,
+): SerializableResult<PlacementMutationResult> {
+  const index = items.findIndex((item) => item.instanceId === instanceId);
+  if (index === -1) {
+    return fail('item_not_found', `No placed item with instance id "${instanceId}".`, {
+      instanceId,
+    });
+  }
+  if (!Number.isFinite(y) || y < 0) {
+    return fail('invalid_elevation', 'Height above the floor must be a finite number of meters, 0 or greater.', {
+      y: String(y),
+    });
+  }
+  const current = items[index];
+  if (current.position.y === y) {
+    return ok({ items, item: current });
+  }
+  const updatedItem: PlacedFurniture = {
+    ...current,
+    position: { ...current.position, y },
+  };
+  const updated = items.slice();
+  updated[index] = updatedItem;
+  return ok({ items: updated, item: updatedItem });
 }
 
 /**
@@ -520,6 +561,40 @@ export function removeProduct(
   const updated = items.slice();
   updated.splice(index, 1);
   return ok({ items: updated, item: current });
+}
+
+/**
+ * Re-tag an item's provenance: 'existing' marks it as already owned (it
+ * never counts toward the budget), 'marketplace' marks it as a new purchase
+ * (it counts toward the budget). All other fields are preserved, including
+ * the lock: ownership is a budget/bookkeeping property, not an arrangement
+ * change, so the lock guard (removal and replacement) does not apply.
+ * Setting the current source again is a no-op success.
+ */
+export function setItemSource(
+  instanceId: string,
+  items: readonly PlacedFurniture[],
+  source: FurnitureSource,
+): SerializableResult<PlacementMutationResult> {
+  const index = items.findIndex((item) => item.instanceId === instanceId);
+  if (index === -1) {
+    return fail('item_not_found', `No placed item with instance id "${instanceId}".`, {
+      instanceId,
+    });
+  }
+  if (source !== 'existing' && source !== 'marketplace') {
+    return fail('invalid_source', `Source must be "existing" or "marketplace", got "${String(source)}".`, {
+      source: String(source),
+    });
+  }
+  const current = items[index];
+  if (current.source === source) {
+    return ok({ items, item: current });
+  }
+  const updatedItem: PlacedFurniture = { ...current, source };
+  const updated = items.slice();
+  updated[index] = updatedItem;
+  return ok({ items: updated, item: updatedItem });
 }
 
 /**

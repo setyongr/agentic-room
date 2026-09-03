@@ -221,12 +221,29 @@ function buildTableLamp(p: FurnitureProduct): Part[] {
   ];
 }
 
-/** Flat rug with a raised inner panel; receives shadows only. */
+/**
+ * Flat rug with a raised inner panel; receives shadows only.
+ *
+ * Rugs are only 8-12 mm thick, so every face needs a real vertical offset:
+ * the whole rug lifts 1.2 mm above the floor plane (its bottom face never
+ * sits exactly on the floor), and the inner panel's top sits 1.2 mm above
+ * the base top instead of sharing its plane. Coplanar faces otherwise
+ * z-fight and shimmer as the camera moves.
+ */
 function buildRug(p: FurnitureProduct): Part[] {
   const { width: w, depth: d, height: h } = p;
+  const FLOOR_LIFT = 0.0012;
+  const PANEL_RAISE = 0.0012;
+  const baseTop = h + FLOOR_LIFT;
   return [
-    { kind: 'box', args: [w, h, d], position: [0, h / 2, 0], mat: 0, receive: true },
-    { kind: 'box', args: [w - 0.1, h * 0.5, d - 0.1], position: [0, h * 0.75, 0], mat: 1, receive: true },
+    { kind: 'box', args: [w, h, d], position: [0, h / 2 + FLOOR_LIFT, 0], mat: 0, receive: true },
+    {
+      kind: 'box',
+      args: [w - 0.1, h * 0.5, d - 0.1],
+      position: [0, baseTop + PANEL_RAISE - h * 0.25, 0],
+      mat: 1,
+      receive: true,
+    },
   ];
 }
 
@@ -366,6 +383,83 @@ function buildDecor(p: FurnitureProduct): Part[] {
   ];
 }
 
+/** Standing TV: bezel + screen, pedestal neck and base; very flat products render as a wall panel. */
+function buildTv(p: FurnitureProduct): Part[] {
+  const { width: w, depth: d, height: h } = p;
+  const thin = d < 0.15;
+  if (thin) {
+    const screenH = h - 0.045;
+    return [
+      { kind: 'box', args: [w, h, 0.045], position: [0, h / 2, 0], mat: 0, cast: true, receive: true },
+      { kind: 'box', args: [w - 0.055, screenH, 0.006], position: [0, h / 2, 0.0195], mat: 3 },
+    ];
+  }
+  const standH = Math.min(Math.max(h * 0.13, 0.08), 0.12);
+  const screenH = h - standH;
+  const screenY = standH + screenH / 2;
+  return [
+    { kind: 'box', args: [w, screenH, 0.045], position: [0, screenY, 0], mat: 0, cast: true, receive: true },
+    { kind: 'box', args: [w - 0.055, screenH - 0.06, 0.006], position: [0, screenY, 0.0195], mat: 3 },
+    { kind: 'cylinder', args: [0.028, 0.036, standH - 0.024, 14], position: [0, 0.012 + (standH - 0.024) / 2, -0.004], mat: 2, cast: true },
+    { kind: 'box', args: [w * 0.4, 0.02, Math.max(d * 0.55, 0.1)], position: [0, 0.01, -0.004], mat: 1, cast: true, receive: true },
+  ];
+}
+
+/** Sound bar: fabric body with end caps and three front driver circles. */
+function buildSoundbar(p: FurnitureProduct): Part[] {
+  const { width: w, depth: d, height: h } = p;
+  const driverR = h * 0.3;
+  const driverX = [-w * 0.32, 0, w * 0.32];
+  return [
+    { kind: 'box', args: [w, h, d], position: [0, h / 2, 0], mat: 0, cast: true, receive: true },
+    { kind: 'box', args: [0.024, h * 0.86, d * 0.92], position: [-(w / 2 - 0.012), h / 2, 0], mat: 1, cast: true },
+    { kind: 'box', args: [0.024, h * 0.86, d * 0.92], position: [w / 2 - 0.012, h / 2, 0], mat: 1, cast: true },
+    ...driverX.map((x): Part => ({
+      kind: 'cylinder',
+      args: [driverR, driverR, 0.014, 12],
+      rotation: [Math.PI / 2, 0, 0],
+      position: [x, h / 2, d / 2 + 0.004],
+      mat: 2,
+      cast: true,
+    })),
+  ];
+}
+
+/** Speakers: floor tower, bookshelf box, or cube subwoofer, all with front drivers. */
+function buildSpeaker(p: FurnitureProduct): Part[] {
+  const { width: w, depth: d, height: h } = p;
+  const disc = (r: number, y: number): Part => ({
+    kind: 'cylinder',
+    args: [r, r, 0.018, 20],
+    rotation: [Math.PI / 2, 0, 0],
+    position: [0, y, d / 2 - 0.001],
+    mat: 2,
+    cast: true,
+  });
+  const cube = Math.min(w, d) >= 0.3;
+  if (cube) {
+    return [
+      { kind: 'box', args: [w, h * 0.94, d], position: [0, h * 0.47, 0], mat: 0, cast: true, receive: true },
+      disc(w * 0.32, h * 0.45),
+    ];
+  }
+  if (h >= 0.7) {
+    const bodyBottom = h * 0.07;
+    const bodyH = h * 0.84;
+    return [
+      { kind: 'box', args: [w * 1.08, h * 0.07, d * 1.08], position: [0, bodyBottom / 2, 0], mat: 2, cast: true, receive: true },
+      { kind: 'box', args: [w * 0.92, bodyH, d * 0.96], position: [0, bodyBottom + bodyH / 2, 0], mat: 0, cast: true, receive: true },
+      disc(w * 0.36, bodyBottom + bodyH * 0.28),
+      disc(w * 0.2, bodyBottom + bodyH * 0.68),
+    ];
+  }
+  return [
+    { kind: 'box', args: [w, h * 0.94, d], position: [0, h * 0.47, 0], mat: 0, cast: true, receive: true },
+    disc(w * 0.38, h * 0.32),
+    disc(w * 0.2, h * 0.66),
+  ];
+}
+
 /** Selects the geometry builder for a product's category. */
 export function buildParts(product: FurnitureProduct): Part[] {
   switch (product.category) {
@@ -399,6 +493,12 @@ export function buildParts(product: FurnitureProduct): Part[] {
       return buildCurtain(product);
     case 'decor':
       return buildDecor(product);
+    case 'tv':
+      return buildTv(product);
+    case 'soundbar':
+      return buildSoundbar(product);
+    case 'speaker':
+      return buildSpeaker(product);
     default:
       return [{ kind: 'box', args: [product.width, product.height, product.depth], position: [0, product.height / 2, 0], mat: 0, cast: true, receive: true }];
   }
@@ -483,6 +583,12 @@ export function buildMaterials(
       return [mk(c1, 0.95), mk('#3A3E44', 0.45, 0.4)];
     case 'decor':
       return [mk(c1, 0.55), variant.material === 'brass' ? mk('#E9E6DF', 0.06, 0.9) : mk(c2, 0.6), mk('#3A3E44', 0.5, 0.3)];
+    case 'tv':
+      return [mk(c1, 0.36, 0.15), mk(c2, 0.45, 0.2), mk('#3A3E44', 0.42, 0.6), mk('#0E1219', 0.42, 0, 0.08)];
+    case 'soundbar':
+      return [mk(c1, 0.8), mk(c2, 0.62), mk('#23262B', 0.5, 0.5)];
+    case 'speaker':
+      return [mk(c1, 0.55), mk(c2, 0.62), mk('#202329', 0.45, 0.35)];
     default:
       return [mk(c1, 0.6), mk(c2, 0.65), mk('#3A3E44', 0.5)];
   }
