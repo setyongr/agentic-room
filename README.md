@@ -2,8 +2,6 @@
 
 Design your room. Shop the furniture. Stay on budget.
 
-__omp_shell("[AgenticRoom living-room planner](public/og.png)")
-
 AgenticRoom is a 3D furniture shopping and room-planning workspace for people
 and browser agents. Browse pieces that fit your budget, place them in the room,
 compare cheaper alternatives, and carry your picks into an integrated cart.
@@ -33,9 +31,9 @@ furniture and a $700 budget for new pieces.
   separated from new marketplace spend.
 - Find cheaper alternatives when a design goes over budget, then replace pieces
   without losing their position in the room.
-- Add placed marketplace pieces to the integrated cart, prune it down to what
-  you actually want, and run a mock checkout (no real payment).
-- Let a browser agent inspect and edit the room through 31 WebMCP tools.
+- Add placed marketplace pieces to the integrated cart and see the running total
+  before you buy; checkout and payment are intentionally outside this demo.
+- Let a browser agent inspect and edit the room through 22 WebMCP tools.
 
 The planner works without an agent. WebMCP requires a supporting browser;
 see the [integration guide](docs/WEBMCP.md) for setup and tool details.
@@ -56,8 +54,8 @@ requirements.
 ## Limitations
 
 Designs and uploads are session-only; reloading resets the room. Catalog prices
-and the cart are demonstrations, and checkout is a mock — no payment is ever
-processed. The 3D scene is approximate, not a guarantee of physical fit.
+and the cart are demonstrations, with no checkout or payment processing.
+The 3D scene is approximate, not a guarantee of physical fit.
 
 Imported GLBs are visual references, excluded from pricing, layout validation,
 and saved designs. They are visible in scene snapshots shared with a connected
