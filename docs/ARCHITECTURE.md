@@ -4,7 +4,7 @@ This document is the deep-dive companion to the README. It maps every
 `src/` module, explains the state model and the domain rules, and records
 the invariants reviewers should hold the code to.
 
-**Status:** current as of commit `0de4c7a` (Slate + Indigo single-workspace UI).
+Public identity: **AgenticRoom**, defined in `src/data/appIdentity.ts`.
 
 ---
 
@@ -12,7 +12,7 @@ the invariants reviewers should hold the code to.
 
 1. **One source of truth.** All state — room geometry, furniture, budget,
    pricing, validation, saved designs, cart, activity feed — lives in a
-   single Zustand store (`src/store/roomStore.ts`). The human UI and the 20
+   single Zustand store (`src/store/roomStore.ts`). The human UI and the 22
    WebMCP tools are two front-ends over the same store actions. There is no
    server state and no duplicated algorithm.
 2. **Pure, deterministic domain.** `src/domain/*` contains pure functions
@@ -47,6 +47,7 @@ src/
     marketplace/        MarketplacePanel — catalog + room-finish sidebar content
     three/              React Three Fiber scene (see §8)
   data/
+    appIdentity.ts      Public app name, tagline, and metadata description
     products.ts         79 hand-authored products (one GLB-backed), lists; optional modelUri/modelYaw fields
     appearance.ts       Room styling registry: wall/floor/wallpaper options,
                         furniture color-to-hex map, appearance previews
@@ -294,8 +295,8 @@ mounts exactly once inside the shell.
 - **PlannerHeader** — brand/plan identity, Designs + Cart (with live count)
   entries, spend/budget control (opens a keyboard-modal budget dialog routed
   through `setBudget(budget, 'human')`), Save design (opens the Designs
-  drawer for a named save), plus one visually hidden `h1` ("Living room
-  planner") for page semantics.
+  drawer for a named save), plus one visually hidden `h1` ("AgenticRoom —
+  Living room planner") for page semantics.
 
 Accessibility invariants used throughout: 44px touch targets, visible indigo
 focus rings, `motion-reduce` support, `aria-live="polite"` announcements,
@@ -333,8 +334,9 @@ Components never hard-code hex values.
   `data/appearance.ts`; nothing is fetched.
 - `UserModelMesh` — session-local uploaded GLB models (`store.userModels`, a
   visual layer outside the catalog: excluded from validation, budgets,
-  activity, WebMCP tools, and saved designs; save_design refuses while any
-  upload is placed). Auto-fitted to measured extents; object URL revoked on
+  activity, structured WebMCP room data, and saved designs; save_design refuses
+  while any upload is placed). Uploads are visible in canvas snapshots returned
+  by `render_scene_snapshot`. Auto-fitted to measured extents; object URL revoked on
   removal.
 - `ModelCreditsPopover` — status-bar credits surface rendering
   `data/modelCredits.ts` entries with their CC-BY sources.
@@ -387,6 +389,7 @@ serializable JSON or structured failures — no throws, no partial mutations.
   `instanceId`/position/rotation/source and repricing is exact.
 - Locked items reject remove/replace everywhere (UI and tools) but allow
   move/rotate.
-- WebMCP read tools never mutate state; tools and UI share one store instance
-  (no drift).
-- No runtime clock/randomness, no network calls, no remote assets.
+- WebMCP read tools leave the room design unchanged, but may append fixed
+  completion entries to activity. Tools and UI share one store instance.
+- No clocks/randomness in domain logic. No app backend or remote assets in
+  the shipped catalog; the bundled GLB and preview are served locally.

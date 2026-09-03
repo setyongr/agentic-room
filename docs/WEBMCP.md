@@ -10,7 +10,7 @@ adds lifecycle, envelope, error, and boundary detail.
 
 ## 1. Overview
 
-The page is its own MCP server — no binary, daemon, or backend. It registers
+AgenticRoom exposes tools directly from the page — no binary, daemon, or backend. It registers
 **22 tools** (10 reads, 12 mutations) against Chrome's in-browser Model
 Context API. The human UI and the tools drive the same Zustand store; a tool
 call is indistinguishable from a click except for `origin: 'agent'`, which is
@@ -36,9 +36,9 @@ Implementation files:
   the mount safe under React Strict Mode's mount → cleanup → mount cycle.
 - Unsupported browsers: registration is skipped, cleanup is a no-op, and the
   planner works normally with no tools exposed.
-- The API is experimental Chrome functionality (verified surface: Chrome
-  152). It is available on secure origins; some builds gate it behind an
-  origin trial/experimental setting. Confirm with:
+- The API is experimental browser functionality and requires a secure
+  origin. Follow the browser setup linked in README; hosts differ in which
+  discovery/execution methods they expose. Confirm with:
 
 ```js
 document.modelContext ?? navigator.modelContext ?? 'unavailable in this build'
@@ -81,7 +81,7 @@ Every tool result is a JSON object with a `success` discriminant:
 { "success": false, "error": "Human readable message", "code": "machine_code", "...details": "..." }
 ```
 
-## 4. Read tools (10) — never mutate state
+## 4. Read tools (10) — leave the room design unchanged
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
@@ -96,11 +96,13 @@ Every tool result is a JSON object with a `success` discriminant:
 | `get_saved_designs` | Session designs, newest first: name, id, item count, budget, marketplace total and room appearance at save time | — |
 | `render_scene_snapshot` | Render the current 3D room to a JPEG image (data URL) for visual/vision checks: `view` = `live` (editor camera as last left) or `orbit`/`top`/`front`/`side` overviews framed without moving the user's camera; output downscaled to `maxWidth`. Captures only the 3D canvas — never UI overlays or text. Returns `format`, `width`, `height`, `dataUrl` | `view?`, `maxWidth?` |
 
-Read annotations: `readOnlyHint`, no feed-logging of arguments. Read-only
+Read annotations: `readOnlyHint`, no feed-logging of arguments. Most read-only
 calls still append *completion* entries ("Inspected the room: …",
 "Searched the marketplace: 1 match", "Layout check passed") to the activity
 feed because the feed observes agent activity, not state changes — those
 templates never contain query text or other free-form content.
+`render_scene_snapshot` does not append an activity entry. Its pixels include
+visible imported GLBs even though those objects are outside structured room data.
 
 ## 5. Mutation tools (12) — same store actions as the UI, `origin: 'agent'`
 
@@ -165,12 +167,15 @@ byte-identical. A mutation that fails reports no feed entry and no
 - The activity feed records only **completed** actions, composed from fixed
   templates plus structured fields (`instanceId`, `productId`, `amount`).
   Tool descriptions and schemas are static strings; there is no code path by
-  which free-form text (queries, prompts, reasoning) reaches the feed or the
-  DOM.
+  which free-form text (queries, prompts, reasoning) reaches the activity
+  feed. User-authored design names and search inputs can appear in their
+  own UI controls; they are not activity messages.
 - Feed is bounded (50 entries); the UI shows the newest six with a "Latest"
   chip; monetary amounts render only for money event types.
-- Read-only tools log completion, never contents. No telemetry, no network,
-  no persistence of agent activity outside the page session.
+- Read-only tools that log record completion, never arguments. The app adds
+  no telemetry or activity persistence. Tool results and requested canvas
+  snapshots are returned to the connected browser agent; that client's data
+  handling is outside this app's control.
 
 ## 8. Testing the surface
 

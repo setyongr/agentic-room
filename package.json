@@ -1,5 +1,7 @@
 {
-  "name": "webmcp",
+  "name": "agenticroom",
+  "description": "A 3D room planner for you and your WebMCP agent.",
+  "license": "MIT",
   "version": "0.1.0",
   "private": true,
   "type": "module",

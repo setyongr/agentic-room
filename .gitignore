@@ -24,5 +24,18 @@ bun-debug.log*
 .DS_Store
 *.pem
 
-# env files
-.env*.local
+# local secrets (commit only sanitized examples)
+.env
+.env.*
+!.env.example
+
+# machine-local tooling and deployment state
+.codegraph/
+.devpost-hackathon-state.json
+.vercel/
+.netlify/
+.wrangler/
+
+# local test artifacts
+/playwright-report/
+/test-results/

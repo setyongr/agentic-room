@@ -1,25 +1,22 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { APP_DESCRIPTION, APP_NAME } from "@/data/appIdentity";
 
 import "./globals.css";
 
-const SITE_NAME = "WebMCP";
-
 export const metadata: Metadata = {
-  applicationName: SITE_NAME,
+  applicationName: APP_NAME,
   title: {
-    default: SITE_NAME,
-    template: `%s · ${SITE_NAME}`,
+    default: `${APP_NAME} — 3D Room Planner`,
+    template: `%s · ${APP_NAME}`,
   },
-  description:
-    "Plan and furnish a living room in 3D — in your browser, with your browser assistant.",
-  creator: SITE_NAME,
+  description: APP_DESCRIPTION,
   formatDetection: { telephone: false },
   openGraph: {
     type: "website",
-    siteName: SITE_NAME,
-    title: SITE_NAME,
-    description: "A 3D room planner your browser assistant can drive.",
+    siteName: APP_NAME,
+    title: `${APP_NAME} — 3D Room Planner`,
+    description: APP_DESCRIPTION,
     locale: "en_US",
   },
   robots: { index: true, follow: true },

@@ -1,8 +1,47 @@
 # AGENTS.md — working in this repository
 
-Guide for coding agents (and human contributors) making changes to the WebMCP
-Furniture Room Planner. Read this before editing; read `docs/ARCHITECTURE.md`
+Guide for coding agents (and human contributors) making changes to AgenticRoom.
+Read this before editing; read `docs/ARCHITECTURE.md`
 before touching anything structural.
+
+## Product identity and release scope
+
+- Public name: **AgenticRoom**. Tagline: **Your room. Your agent. One shared
+  canvas.** Runtime identity lives in `src/data/appIdentity.ts`; keep the UI,
+  metadata, package metadata, and README consistent. WebMCP names the protocol,
+  not the app. Preserve original copyright and third-party attribution.
+- Hosting is deliberately undecided. Follow `docs/DEPLOYMENT.md` for local
+  production checks. Do not choose a provider, add hosting configuration,
+  deploy, push, or change repository visibility without the user's request.
+- Before handing off a release, run `bun run check`, `bun run test`, and
+  `bun run build`; distinguish automated results from manual checks not run.
+- Do not commit credentials, `.env` files, generated builds, local tool state,
+  or temporary screenshots. Keep source assets and license notices tracked.
+
+## Hackathon submission boundary
+
+This project is being prepared for [The WebMCP Challenge](https://webmcp.devpost.com/).
+Event notes were checked September 3, 2026; consult the
+[official rules](https://webmcp.devpost.com/rules) and
+[organizer updates](https://webmcp.devpost.com/updates) before submission.
+
+- Deadline: September 3, 2026 at 13:00 PDT / September 4 at 03:00 WIB.
+- Prepare a working live URL, public repository with detectable open-source
+  license, public YouTube demo under three minutes with audio, and an English
+  description of WebMCP's fit, implementation, and human–agent collaboration
+  (or English translations). Record the actual browser/client tested.
+- Preserve dated history. If the project predates August 25, distinguish
+  pre-existing work from WebMCP work added during the submission period.
+- At the deadline, freeze the submitted repo, video, and deployed site as
+  instructed by the organizers. Keep the live app working through judging
+  (ends September 21 at 17:00 PDT / September 22 at 07:00 WIB). After the
+  deadline, do not modify submitted materials; ask the user to identify a
+  separate development fork before making changes. Follow official guidance
+  on when the freeze ends.
+- Repository publication and site deployment are not hackathon submission.
+  Never register, accept terms, or submit on the user's behalf without the
+  required explicit confirmation; do not record eligibility or acceptance
+  based on these notes.
 
 ## What this is
 
@@ -37,7 +76,7 @@ src/
   domain/    pure logic + types + colocated *.test.ts   ← ground truth rules
              (incl. appearance.ts — visual-only room styling updates)
   data/      products.ts (79, incl. one model-backed sofa), appearance.ts (room styling registry),
-             placementZones.ts (10), demoRoom.ts (presets)
+             placementZones.ts (10), demoRoom.ts (presets), appIdentity.ts (public branding)
   store/     roomStore.ts (single Zustand source of truth), selectors.ts
   webmcp/    registerTools.ts, serialize.ts, tools/{read,mutation}Tools.ts
              (10 reads / 12 mutations)
@@ -47,6 +86,7 @@ docs/
   ARCHITECTURE.md   module map, state model, invariants, UI, 3D, theming
   WEBMCP.md         protocol spec: lifecycle, envelope, tools, errors
   TESTING.md        commands, suite contracts, manual verification passes
+  DEPLOYMENT.md     provider-neutral production and public-release checklist
 README.md           product overview, quick start, demo workflows
 ```
 
@@ -70,7 +110,11 @@ README.md           product overview, quick start, demo workflows
    move/rotate always allowed.
 6. **Budget semantics.** Only `source: 'marketplace'` items count toward
    `newTotal`; replacements keep instance id/position/rotation/source.
-7. **No new runtime dependencies or network assets** without an explicit
+7. **Session uploads are visual only.** Imported GLBs are outside catalog
+   validation, budgets, cart, and structured WebMCP room data. They appear
+   in canvas snapshots. Saving fails while uploads are placed; do not claim
+   that uploads are persisted or fully agent-editable.
+8. **No new runtime dependencies or network assets** without an explicit
    ask. The 3D scene is procedural by default; products may opt into a
    bundled, repo-served GLB (`modelUri`, credited in `THIRD_PARTY_NOTICES.md`)
    that loads on demand with a procedural fallback. Product tiles are CSS

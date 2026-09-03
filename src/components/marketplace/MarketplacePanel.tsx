@@ -570,7 +570,7 @@ function ProductCard({
             </div>
           </dl>
 
-          <div className="mt-auto flex items-center gap-2 pt-1.5">
+          <div className="mt-auto flex flex-col gap-2 pt-1.5">
             <button
               type="button"
               aria-expanded={expanded}
@@ -599,7 +599,7 @@ function ProductCard({
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface transition-colors hover:border-accent/50 motion-reduce:transition-none">
-      <div className="relative h-24 w-full shrink-0 overflow-hidden" style={{ background: gradient }} aria-hidden="true">
+      <div className="relative h-24 w-full shrink-0 overflow-hidden" style={{ background: gradient }}>
         {previewSrc ? (
           <img
             src={previewSrc}
@@ -615,7 +615,7 @@ function ProductCard({
           aria-label={`View details for ${product.name}`}
           aria-expanded={false}
           onClick={onToggleExpand}
-          className="absolute top-1 right-1 inline-flex size-9 items-center justify-center rounded-control border border-border bg-surface/85 text-text-muted backdrop-blur-sm transition-colors hover:bg-surface hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+          className="absolute top-1 right-1 inline-flex size-11 items-center justify-center rounded-control border border-border bg-surface/85 text-text-muted backdrop-blur-sm transition-colors hover:bg-surface hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
         >
           <ChevronDown aria-hidden="true" className="size-4" />
         </button>

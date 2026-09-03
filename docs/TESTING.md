@@ -11,7 +11,7 @@ WebMCP passes that the automated suites deliberately do not cover.
 Requires [Bun](https://bun.sh) 1.3 (pinned via `packageManager`).
 
 ```bash
-bun install        # install dependencies
+bun install --frozen-lockfile # install the committed dependency versions
 bun run check      # TypeScript strict typecheck  (tsc --noEmit)
 bun run test       # Vitest domain suites         (jsdom environment)
 bun run build      # production build             (Next.js)
@@ -21,6 +21,26 @@ bun run dev        # development server with HMR
 
 Expected baseline at time of writing: typecheck clean, **66 tests across 8
 files**, production build succeeds with a single static route (`/`).
+
+### Release-preparation pass — September 3, 2026
+
+- Typecheck, all 66 domain tests, and the production build pass.
+- Local production UI checked at 1440×900 and 375×812: one branded `h1`,
+  one marketplace panel, no document-level overflow. Product-details controls
+  are named and usable; mobile-sheet Escape restores focus to its opener.
+- Codex in-app browser discovered the 22 tools. Room inspection, scene
+  capture, the four-piece hero workflow (including the $594 cart), and Budget
+  Rescue ($684 total, $316 remaining) succeeded through the registered tools.
+- The production route, bundled GLB, and committed preview returned HTTP 200.
+- Basic credential-pattern checks found no matches in the working sources
+  or ten existing commits. This was not a comprehensive security audit.
+- Non-blocking Three.js dependency warnings for `PCFSoftShadowMap` and
+  `Clock` deprecations remain; no dependency upgrade was attempted.
+
+This is a scoped local check, not a full accessibility audit or proof that
+every tool/error case was exercised. A deployed-origin check, other browser
+clients, and the complete manual matrix below remain release checks for the
+chosen host. No public deployment or Devpost submission was performed.
 
 ## 2. Automated suites (`src/domain/*.test.ts`)
 
@@ -40,8 +60,9 @@ catalog products and the seeded room — no React, no store, no WebMCP.
 
 ## 3. WebMCP verification (browser)
 
-The tools are only observable in a browser that ships the Model Context API
-(verified surface: Chrome 152). The app degrades gracefully everywhere else.
+The tools are only observable in a browser that ships the Model Context API.
+Use the browser setup linked from README and record the actual browser/client
+version when verifying a release. The app degrades gracefully elsewhere else.
 
 ### 3.1 Setup
 
@@ -61,14 +82,16 @@ const mc = document.modelContext ?? navigator.modelContext;
 
 Use the `run(name, args)` snippet from README ("Testing the WebMCP
 integration in Chrome"). It handles the JSON-string arguments and envelope
-normalization. After **every** call, the status bar's **Agent activity**
-entry and the shared state (scene, header spend, validity) update — a good
-sanity signal that the call landed on the live store.
+normalization. Successful logged actions update **Agent activity**; mutations
+also update the scene, spend, or validity as appropriate. Scene snapshots,
+failed calls, and no-op mutations need not add an activity entry.
 
 ### 3.3 Required checks
 
-1. **Every read tool** returns `success: true` with no state change
-   (`get_room_state` item count is unchanged after the batch).
+1. **Every read tool** returns `success: true` with no room-design change
+   (`get_room_state` item count is unchanged after the batch). Fixed-template
+   activity entries are allowed. Scene capture requires a mounted, working
+   WebGL canvas; before it is ready, expect `capture_unavailable`.
 2. **Every mutation tool** round-trips: `place_product` → item appears in
    `get_room_state` and in the Edit rail list; `move_product`/`rotate_product`
    update `position`/`rotation`; `set_item_locked` flips `locked`;
@@ -167,7 +190,7 @@ expected numbers. Acceptance:
 
 ### 4.3 Accessibility quick pass
 
-- Exactly one `h1` ("Living room planner"); every control has an accessible
+- Exactly one `h1` ("AgenticRoom — Living room planner"); every control has an accessible
   name (icon-only buttons on small screens still named).
 - Focus is visible (indigo ring) and never lands on off-screen content;
   modals (drawers, budget dialog, mobile sheet) trap focus and restore it on
@@ -178,8 +201,9 @@ expected numbers. Acceptance:
 
 ## 5. Performance and hygiene sanity
 
-- Fresh load: no network asset requests beyond the Next.js bundle (no remote
+- Fresh load: only same-origin app and bundled asset requests (no remote
   fonts, textures, or images); the default room renders from procedural data.
+  The catalog can request the committed sofa preview image without loading its GLB.
   The single bundled sofa GLB (`public/models/sofa-ak-studio.glb`) is fetched
   only when the Noir Studio Sofa product is placed; user-uploaded models load
   separately from their own session object URLs.

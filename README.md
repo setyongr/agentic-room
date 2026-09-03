@@ -1,6 +1,8 @@
-# WebMCP — a room planner your browser assistant can drive
+# AgenticRoom
 
-WebMCP is a small but complete living-room design studio: a deterministic
+**Your room. Your agent. One shared canvas.**
+
+AgenticRoom is a browser-based living-room design studio: a deterministic
 furniture marketplace, a 3D room editor, budget-aware pricing and layout
 validation, saved designs, and a shopping cart — all in the browser, with no
 backend and no AI provider. What makes it different is that the page **exposes
@@ -10,11 +12,14 @@ script with access to the page — can inspect the room, place and swap
 furniture, and manage the budget through the exact same code paths the human
 UI uses, while every completed action appears in a visible activity feed.
 
-The point is not the furniture. It is a concrete demonstration of the Model
-Context API as a **shared, verifiable handoff between a web app and an
+Proposed hackathon submission title: **AgenticRoom — A WebMCP-powered 3D room planner**
+
+Keep the furniture you own, furnish around it within a budget, and adjust the
+result together. WebMCP gives the agent structured access to the same room
+you see and edit — a **shared, verifiable handoff between a web app and an
 agent**:
 
-- **No server-side MCP host needed.** The page is its own MCP server: it
+- **No server-side MCP host needed.** The page exposes its tools directly: it
   registers 22 tools (10 reads, 12 mutations) with JSON schemas and safety
   annotations against Chrome's in-browser Model Context API. There is no
   `webmcp` binary, no WebSocket daemon, no API key, and nothing to deploy
@@ -42,19 +47,12 @@ agent**:
 ## How it works
 
 ```
-                    ┌──────────────────────────────────────────────┐
-                    │                browser page                  │
-                    │                                              │
-  human UI ────────►│  Zustand room store (single source of truth) │
-  (clicks, forms)   │  furniture · budget · pricing · validation   │
-                    │  saved designs · cart · activity feed        │
-                    │        ▲                            ▲        │
-                    │        │ same actions               │         │
-                    │        │ origin: 'agent'            │         │
-  Chrome Model ─────┤  WebMcpProvider ── 22 tools ────────┘         │
-  Context API       │  (registerRoomTools)                          │
-  (assistant /      │  document.modelContext.registerTool(...)      │
-  console script)   └──────────────────────────────────────────────┘
+Human controls ────────────────────┐
+                                  ▼
+                            Shared room store → 3D scene, budget, validation
+                                  ▲
+Browser agent → 22 WebMCP tools ────┘
+               (origin: 'agent')                 + agent activity feed
 ```
 
 - **Registration.** `WebMcpProvider` (mounted once inside `PlannerShell`)
@@ -70,9 +68,10 @@ agent**:
   JSON with capped lists (25 items). Mutations route through the store's
   domain functions; on success the store recomputes `pricing` and
   `validation` synchronously, and on failure returns the domain's
-  `{success:false, error, code, ...details}` payload unchanged — no throw, no
-  partial mutation.
-- **Activity feed.** Every completed agent action appends one entry assembled
+  `{ok:false, code, message, details?}` failure as a tool payload
+  `{success:false, error, code, ...details}`, preserving the code, message,
+  and details — no throw, no partial mutation.
+- **Activity feed.** Logged agent actions append an entry assembled
   from a fixed per-event template plus structured fields (`instanceId`,
   `productId`, `amount`); callers can never inject free-form text. The feed is
   bounded at 50 entries, and the UI shows the newest 6 with a "Latest" chip
@@ -96,6 +95,12 @@ agent**:
   ten placement zones (media wall, reading corner, sofa sides, window side,
   …), orbit/top/front/side cameras, click-to-select, and validation-driven
   highlights.
+- **Room measurements**: resize the floor from 2–10 m per side and ceiling
+  from 2.4–4 m. Openings and zones adapt; furniture stays in place so you can
+  see which pieces no longer fit.
+- **Local model previews**: place the bundled, credited sofa model or import
+  your own GLB (up to 15 MiB). Imported models are session-only visual objects,
+  not catalog products; see the limitations below.
 - **Placement intelligence**: zone placement enforces category allowance,
   occupancy limits, and footprint fit; layout validation checks room bounds,
   furniture overlap (soft items like rugs never block), opening clearance,
@@ -120,7 +125,10 @@ All results are JSON strings: `{success:true, ...}` or
 `{success:false, error, code, ...details}`. Argument names match the JSON
 schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 
-### Reads (10) — read-only, never mutate state
+### Reads (10) — leave the room design unchanged
+
+Reads may append fixed-template activity entries. Scene snapshots capture
+the canvas without adding an activity entry or moving the editor camera.
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
@@ -148,16 +156,17 @@ schema exactly (`camelCase` keys; `position` is a nested `{x, z}` object).
 | `replace_product` | Swap the product backing an item (same category, in stock, unlocked); keeps instance id, position, rotation, source, and the color when the replacement offers it; returns the price `savings` (negative when pricier) | `instanceId`, `replacementProductId` |
 | `set_room_appearance` | Style the room: all three finish ids or `preset: "default"`; visual only, never affects pricing or layout | `wallFinishId`, `floorFinishId`, `wallpaperId` **or** `preset` |
 | `resize_room` | Resize the room to real measured dimensions (width/depth/height in meters, ranges in `get_room_state` → `room.resizeLimits`); openings stay on their walls (scaled proportionally, removed and reported when a wall becomes too short) and placement zones rebuild with the room; furniture is never moved — out-of-bounds pieces surface as layout errors. Returns `status`, `dimensions`, `floorAreaM2`, `removedOpeningIds` plus refreshed pricing and layout | `width`, `depth`, `height` |
-| `save_design` | Capture the live design (room, items with variants, appearance) as a named snapshot | `name`, `thumbnailGradient?` |
+| `save_design` | Capture the live design (room, items with variants, appearance) as a named snapshot; rejects while imported GLBs are placed (`user_models_not_savable`) | `name`, `thumbnailGradient?` |
 | `load_design` | Restore a session snapshot, including room appearance and item variants (destructive: current design is discarded; unknown ids fail with `design_not_found`) | `designId` |
 | `add_to_cart` | Add placed marketplace items to the cart at catalog prices; all-or-nothing (unknown, existing, or already-carted instances reject the whole request) | `instanceIds` (array) |
 
 ## Quick start
 
-Requires [Bun](https://bun.sh) (the repo pins `bun@1.3.14`).
+Requires [Bun](https://bun.sh) (the repo pins `bun@1.3.14`) and Node.js
+20.9 or later for the Next.js CLI. No API keys, database, or `.env` file needed.
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run dev        # start the Next.js dev server → http://localhost:3000
 ```
 
@@ -184,10 +193,12 @@ bun run start      # serve the production build
 
 ## Testing the WebMCP integration in Chrome
 
-The Model Context API is experimental. It is enabled on secure origins
-(localhost counts) in Chrome builds that ship it — the surface this app
-registers against was verified on **Chrome 152** — but some builds gate it
-behind the Model Context origin trial or an experimental feature setting. The
+The Model Context API is experimental and requires a supporting browser on a
+secure origin (HTTPS, or localhost for development). The challenge's
+[browser setup instructions](https://webmcp.devpost.com/resources) describe
+ChatGPT's in-app browser and Chrome 149+ with
+`chrome://flags/#enable-webmcp-testing` enabled. API shapes can vary by host;
+the driver below targets hosts exposing `getTools()` and `executeTool()`. The
 app degrades gracefully: if both `document.modelContext` and
 `navigator.modelContext` are `undefined`, the UI works normally and no tools
 are registered. Confirm availability with:
@@ -225,17 +236,18 @@ the MCP-shaped `{content:[{type:'text', text:'…'}]}` envelope used by other
 Model Context integrations.
 
 Watch the **Agent activity** entry in the status bar (open its drawer from
-there) as you call tools: each completed action appears, and every mutation
-also updates the 3D scene, the header budget line, and the validation state
-live.
+there) as you call tools: logged actions appear as fixed-template messages,
+and mutations update the relevant scene, budget, or validation state live.
+Scene snapshots and no-op calls need not add an activity entry.
 
 ## Demo workflows
 
-Both workflows start from shipped presets, use only catalog products and
-zones, and were verified end-to-end against the registered tools (layout
-`valid: true`, `issueCount: 0` at every step).
+Both workflows start from shipped presets and use only catalog products and
+zones. The figures below are acceptance targets; rerun them on the deployed
+URL before recording a demo. Budget Rescue starts over budget and becomes
+valid after its first replacement.
 
-### Hero workflow — furnish the empty room, $594 of a $700 budget
+### Hero workflow — finish the room, $594 of a $700 budget
 
 The default demo room (what you see on load) has the locked sofa and rug, the
 existing entry console, a $700 budget, and **zero marketplace spend**. Finish
@@ -264,7 +276,7 @@ four. Instance ids are deterministic (`<productId>-1`); the feed shows one
 entry per action, from "Inspected the room" through "Added 4 items to the
 cart".
 
-### Budget Rescue — from $1,140 over a $1,000 budget to $684, $316 to spare
+### Budget Rescue — from $1,140 spent against $1,000 to $684
 
 The Budget Rescue preset is the same room with four premium marketplace
 pieces (Terra Coffee Table $340, Halo Floor Lamp $220, Aria Accent Chair
@@ -313,6 +325,7 @@ Vitest under jsdom:
 | `cart.test.ts` | 8 | marketplace-only adds, all-or-nothing rejection, dedupe, totals |
 | `alternatives.test.ts` | 5 | candidate filtering, ranking determinism, caps, structured errors |
 | `appearance.test.ts` | 7 | room appearance updates: immutability, same-value no-ops, invalid id rejection |
+| `resize.test.ts` | 12 | dimension limits, opening and zone rescaling, immutable/no-op behavior |
 
 ## Project structure
 
@@ -332,10 +345,10 @@ src/
                     room appearance registry, demo presets (default demo +
                     Budget Rescue)
   domain/           pure logic: catalog, placement, validation, pricing,
-                    alternatives, designs, cart, activity, shared types
+                    alternatives, designs, cart, activity, appearance, resize, shared types
   store/            roomStore — the single Zustand source of truth
   webmcp/           Model Context API surface: registerTools, serialize,
-                    tools/readTools.ts (9), tools/mutationTools.ts (11)
+                    tools/readTools.ts (10), tools/mutationTools.ts (12)
 ```
 
 Each `src/` directory and every runtime rule is explained in depth in
@@ -344,12 +357,15 @@ Each `src/` directory and every runtime rule is explained in depth in
 
 ## Documentation
 
-- `docs/ARCHITECTURE.md` — module map, state model and actions, domain rules,
+- [Architecture](docs/ARCHITECTURE.md) — module map, state model and actions, domain rules,
   determinism, UI composition, 3D rendering approach.
-- `docs/WEBMCP.md` — the Model Context surface: registration lifecycle,
+- [WebMCP reference](docs/WEBMCP.md) — the Model Context surface: registration lifecycle,
   result envelope, per-tool schema, structured errors, privacy boundary.
-- `docs/TESTING.md` — commands, test-suite contracts, and the manual
+- [Testing](docs/TESTING.md) — commands, test-suite contracts, and the manual
   desktop/mobile/WebMCP verification pass.
+- [Deployment checklist](docs/DEPLOYMENT.md) — provider-neutral build, hosting,
+  and public-release checks; no hosting platform has been selected.
+- [Contributor instructions](AGENTS.md) — repository invariants and change workflow.
 
 ## Deterministic behavior
 
@@ -369,9 +385,13 @@ Each `src/` directory and every runtime rule is explained in depth in
 
 ## Limitations
 
-- **Procedural 3D.** The viewport is a decorative, procedurally lit R3F scene
-  (primitive meshes, contact shadows, no remote environment or photoreal
-  assets). It reflects state faithfully but is not a CAD tool.
+- **Approximate 3D.** Most furniture is procedural; one bundled sofa uses a
+  credited GLB. The scene is not a CAD tool or a guarantee of physical fit.
+- **Imported GLBs are visual only.** They are not included in catalog tool
+  results, layout validation, budgets, carts, or saved designs. Saving is
+  blocked until imports are removed. They remain visible in scene snapshots
+  returned to the connected agent. Use self-contained models you trust and
+  have permission to use; imported files are not uploaded to an app backend.
 - **In-memory state.** Everything lives in the browser's Zustand store.
   Reloading resets to the default demo; there is no persistence, accounts, or
   backend.
@@ -391,3 +411,41 @@ Bun 1.3 (runtime + package manager) · Next.js 16 (App Router) · React 19 ·
 TypeScript (strict) · Zustand 5 (state) · Three.js + @react-three/fiber 9 +
 @react-three/drei (3D) · Tailwind CSS 4 + lucide-react (UI) · Vitest 4 +
 jsdom (tests).
+
+## The WebMCP Challenge
+
+Prepared for [The WebMCP Challenge](https://webmcp.devpost.com/), hosted by
+OpenAI. These notes reflect event information checked on September 3, 2026;
+they do not indicate registration, submission, or personal eligibility.
+
+- Submission deadline: **September 3, 2026, 1:00 PM PDT**
+  (**September 4, 03:00 WIB**).
+- Judging ends September 21, 2026, 5:00 PM PDT (September 22, 07:00 WIB).
+  Winners are expected on or around September 23, Pacific time.
+- Judging weights are equal: WebMCP Leverage, Execution, Potential Impact,
+  and Creativity & Ambition. Show the agent actually using the tools and
+  the human continuing from the same room state.
+- Submission materials: working live URL; public source repository with a
+  visible open-source license; public YouTube demo under three minutes with
+  narration; description explaining WebMCP's fit, implementation, and the
+  human–agent workflow. Materials must be English or include translations.
+- Include browser/client testing details and credentials if needed. If any
+  work predates August 25, document what was added during the submission
+  period with dated commits or equivalent evidence.
+- The [organizer updates](https://webmcp.devpost.com/updates) require freezing
+  the submitted repository, video, and live site at the deadline. Keep the
+  app available for judging; continue development in a separate fork.
+- Confirm the entry is **Submitted**, not a saved draft. Publishing this
+  repository or deploying the site does not submit it to Devpost.
+
+The [official rules](https://webmcp.devpost.com/rules) and organizer notices
+prevail over this summary. Review eligibility and third-party rights before
+entering; do not infer consent from these notes.
+
+## License and credits
+
+Application source is licensed under [MIT](LICENSE). The bundled sofa and its
+preview retain their separate CC BY 4.0 attribution in
+[Third-Party Notices](THIRD_PARTY_NOTICES.md) and the in-app Model credits.
+The original copyright notice is preserved. AgenticRoom is the application
+name; WebMCP is the browser protocol it uses, not a claim of affiliation.

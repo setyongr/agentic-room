@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import type { CameraMode } from '@/domain/types';
+import { APP_NAME, APP_TAGLINE } from '@/data/appIdentity';
 import { selectCartCount, selectTotals } from '@/store/selectors';
 import { useRoomStore } from '@/store/roomStore';
 
@@ -110,11 +111,11 @@ export function PlannerHeader({ onOpenCart, onOpenDesigns }: PlannerHeaderProps)
   return (
     <>
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface px-3 sm:px-5">
-        <h1 className="sr-only">Living room planner</h1>
+        <h1 className="sr-only">{APP_NAME} — Living room planner</h1>
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold tracking-tight text-text">Hearth &amp; Form</p>
-            <p className="hidden text-xs text-text-muted sm:block">Living room plan</p>
+            <p className="truncate text-sm font-semibold tracking-tight text-text">{APP_NAME}</p>
+            <p className="hidden text-xs text-text-muted sm:block">{APP_TAGLINE}</p>
           </div>
           <span className="hidden h-5 w-px bg-border md:block" aria-hidden="true" />
           <nav aria-label="Planner actions" className="flex items-center gap-1">
