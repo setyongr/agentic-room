@@ -45,7 +45,7 @@ src/
     three/              React Three Fiber scene (see §8)
   data/
     appIdentity.ts      Public app name, tagline, and metadata description
-    products.ts         88 hand-authored products (one GLB-backed, incl. TVs/sound bars/speakers), lists; optional modelUri/modelYaw fields
+    products.ts         92 hand-authored products (one GLB-backed; TV/sound bar/speaker AV line; four-size bed line), lists; optional modelUri/modelYaw fields
     appearance.ts       Room styling registry: wall/floor/wallpaper options,
                         furniture color-to-hex map, appearance previews
     placementZones.ts   10 named zones with footprints, categories, hints
@@ -63,7 +63,7 @@ src/
     appearance.ts       Room appearance updates (visual-only styling state)
     cart.ts             Marketplace-only cart rules
     activity.ts         Activity feed model: types, templates, bounds
-    *.test.ts           Colocated Vitest suites (9 files, 135 tests)
+    *.test.ts           Colocated Vitest suites (9 files, 138 tests)
   store/
     roomStore.ts        The Zustand store: state, actions, commit pipeline
     selectors.ts        Stable derived selectors (selected item, totals, …)

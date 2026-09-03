@@ -64,6 +64,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   tv: 'TVs',
   soundbar: 'Sound bars',
   speaker: 'Speakers',
+  bed: 'Beds',
 };
 
 const TAB_HEADING: Record<FurnishTab, string> = {

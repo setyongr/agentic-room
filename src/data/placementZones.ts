@@ -38,7 +38,8 @@ export interface RankedPlacementZone extends PlacementZone {
  * media wall (north), reading corner (northeast), center table, sofa sides,
  * window side (east), back wall (southwest), entry wall (west), the
  * balcony-adjacent safe area (southeast, beside the balcony door), and the
- * living-area anchor (sofa, rug, and coffee table).
+ * living-area anchor (sofa, rug, coffee table; also the only zone that
+ * accepts beds — a sleeping corner can be laid out over the open floor).
  */
 export const PLACEMENT_ZONES: readonly RankedPlacementZone[] = [
   {
@@ -76,9 +77,10 @@ export const PLACEMENT_ZONES: readonly RankedPlacementZone[] = [
       'table_lamp',
       'plant',
       'decor',
+      'bed',
     ],
     rank: 2,
-    hint: 'Anchor zone for the sofa, rug, and coffee table; the seed room ships with these already placed.',
+    hint: 'Anchor zone for the sofa, rug, and coffee table (beds drop here too); the seed room ships with the first three already placed.',
   },
   {
     id: 'media-wall',

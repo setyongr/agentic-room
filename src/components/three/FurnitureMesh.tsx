@@ -460,6 +460,48 @@ function buildSpeaker(p: FurnitureProduct): Part[] {
   ];
 }
 
+/**
+ * Platform bed: full-height headboard slab at the back (-z) end, a low base
+ * on short feet, mattress and duvet running to the foot (+z), two pillows
+ * leaning on the headboard, and a folded throw across the foot. Product
+ * depth covers headboard plus mattress; all sizes share the same ratios so
+ * Twin/Full/Queen/King only differ in footprint.
+ */
+function buildBed(p: FurnitureProduct): Part[] {
+  const { width: w, depth: d, height: h } = p;
+  const headT = h * 0.076; // headboard thickness ≈ 0.08 m
+  const footH = h * 0.08; // feet under the base
+  const baseH = h * 0.11; // base slab thickness
+  const matH = h * 0.17; // mattress thickness
+  const duvetH = h * 0.055;
+  const pillowH = h * 0.085;
+  const throwH = h * 0.048;
+  const bedD = d - headT; // base/mattress depth in front of the headboard
+  const baseTop = footH + baseH;
+  const matTop = baseTop + matH;
+  const duvetTop = matTop + duvetH;
+  const zc = headT / 2; // shared center z of base and mattress
+  const ox = w / 2 - 0.055;
+  const ozHead = zc - bedD / 2 + 0.055;
+  const ozFoot = zc + bedD / 2 - 0.055;
+  const pillowD = bedD * 0.16;
+  const pillowZ = -d / 2 + headT + pillowD / 2 + 0.02;
+  const footThrowZ = zc + bedD / 2 - d * 0.11;
+  return [
+    { kind: 'box', args: [w, h, headT], position: [0, h / 2, -d / 2 + headT / 2], mat: 0, cast: true, receive: true },
+    { kind: 'box', args: [w - 0.03, baseH, bedD], position: [0, footH + baseH / 2, zc], mat: 0, cast: true, receive: true },
+    { kind: 'cylinder', args: [0.027, 0.027, footH, 12], position: [-ox, footH / 2, ozHead], mat: 2, cast: true },
+    { kind: 'cylinder', args: [0.027, 0.027, footH, 12], position: [ox, footH / 2, ozHead], mat: 2, cast: true },
+    { kind: 'cylinder', args: [0.027, 0.027, footH, 12], position: [-ox, footH / 2, ozFoot], mat: 2, cast: true },
+    { kind: 'cylinder', args: [0.027, 0.027, footH, 12], position: [ox, footH / 2, ozFoot], mat: 2, cast: true },
+    { kind: 'box', args: [w - 0.09, matH, bedD - 0.05], position: [0, baseTop + matH / 2, zc], mat: 3, cast: true, receive: true },
+    { kind: 'box', args: [w - 0.09, duvetH, bedD - 0.05], position: [0, matTop + duvetH / 2 + 0.002, zc], mat: 3, cast: true, receive: true },
+    { kind: 'box', args: [w * 0.3, pillowH, pillowD], position: [-w * 0.235, matTop + duvetH + pillowH / 2 - 0.004, pillowZ], rotation: [-0.14, 0, 0], mat: 3, cast: true },
+    { kind: 'box', args: [w * 0.3, pillowH, pillowD], position: [w * 0.235, matTop + duvetH + pillowH / 2 - 0.004, pillowZ], rotation: [-0.14, 0, 0], mat: 3, cast: true },
+    { kind: 'box', args: [w * 0.58, throwH, d * 0.09], position: [0, duvetTop + throwH / 2 - 0.004, footThrowZ], mat: 1, cast: true, receive: true },
+  ];
+}
+
 /** Selects the geometry builder for a product's category. */
 export function buildParts(product: FurnitureProduct): Part[] {
   switch (product.category) {
@@ -499,6 +541,8 @@ export function buildParts(product: FurnitureProduct): Part[] {
       return buildSoundbar(product);
     case 'speaker':
       return buildSpeaker(product);
+    case 'bed':
+      return buildBed(product);
     default:
       return [{ kind: 'box', args: [product.width, product.height, product.depth], position: [0, product.height / 2, 0], mat: 0, cast: true, receive: true }];
   }
@@ -589,6 +633,8 @@ export function buildMaterials(
       return [mk(c1, 0.8), mk(c2, 0.62), mk('#23262B', 0.5, 0.5)];
     case 'speaker':
       return [mk(c1, 0.55), mk(c2, 0.62), mk('#202329', 0.45, 0.35)];
+    case 'bed':
+      return [mk(c1, 0.5), mk(c2, 0.55), mk('#3A3E44', 0.55), mk('#EFE7DA', 0.96)];
     default:
       return [mk(c1, 0.6), mk(c2, 0.65), mk('#3A3E44', 0.5)];
   }

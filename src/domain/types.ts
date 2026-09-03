@@ -34,6 +34,7 @@ export const FURNITURE_CATEGORIES = [
   'tv',
   'soundbar',
   'speaker',
+  'bed',
 ] as const;
 
 /** Furniture category identifier. */

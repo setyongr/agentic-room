@@ -86,3 +86,38 @@ describe('audio-visual catalog additions', () => {
     }
   });
 });
+
+/** Bed products: one four-size line, strictly ordered and placeable on the living-area zone. */
+describe('bed catalog additions', () => {
+  it('adds the four Haven bed sizes under the bed category', () => {
+    const result = searchProducts({ filters: { categories: ['bed'] }, pageSize: 100 });
+    expect(result.total).toBe(4);
+    expect(result.products.map((p) => p.id)).toEqual([
+      'haven-twin-bed',
+      'haven-full-bed',
+      'haven-queen-bed',
+      'haven-king-bed',
+    ]);
+  });
+
+  it('orders bed sizes with strictly increasing extents', () => {
+    const beds = PRODUCTS.filter((p) => p.category === 'bed').sort((a, b) => a.width - b.width);
+    expect(beds.map((b) => b.width)).toEqual([1.05, 1.42, 1.58, 1.98]);
+    expect(beds.map((b) => b.depth)).toEqual([1.98, 1.98, 2.1, 2.1]);
+    for (const bed of beds) {
+      expect(bed.height).toBe(1.05);
+    }
+  });
+
+  it('places every bed size on the living-area zone at 0° and 90°', () => {
+    for (const product of PRODUCTS.filter((p) => p.category === 'bed')) {
+      for (const rotation of [0, 90]) {
+        const fit = fitProductInZone(product.id, DEFAULT_ROOM, 'living-area', { rotation });
+        expect(fit.ok).toBe(true);
+        if (!fit.ok) {
+          throw new Error(`${product.id} at ${rotation}° rejected by living-area: ${fit.message}`);
+        }
+      }
+    }
+  });
+});

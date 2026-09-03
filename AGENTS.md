@@ -53,7 +53,7 @@ come from `getTools()`).
 src/
   domain/    pure logic + types + colocated *.test.ts   ← ground truth rules
              (incl. appearance.ts — visual-only room styling updates)
-  data/      products.ts (88, incl. one model-backed sofa; TV/soundbar/speaker AV line), appearance.ts (room styling registry),
+  data/      products.ts (92, incl. one model-backed sofa; TV/soundbar/speaker AV line; four-size bed line), appearance.ts (room styling registry),
              placementZones.ts (10), demoRoom.ts (presets), appIdentity.ts (public branding)
   store/     roomStore.ts (single Zustand source of truth), selectors.ts
   webmcp/    registerTools.ts, serialize.ts, tools/{read,mutation}Tools.ts

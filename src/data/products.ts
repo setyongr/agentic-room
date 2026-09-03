@@ -36,6 +36,7 @@ export const categories = [
   'tv',
   'soundbar',
   'speaker',
+  'bed',
 ] as const;
 
 export type FurnitureCategory = (typeof categories)[number];
@@ -1428,6 +1429,67 @@ export const PRODUCTS: readonly FurnitureProduct[] = [
     material: 'steel',
     stock: 10,
     thumbnailGradient: 'linear-gradient(135deg, #14161C, #4B5563)',
+  },
+
+  // ── Beds ────────────────────────────────────────────────────────────
+  // One platform-bed design in four mattress sizes (Twin/Full/Queen/King).
+  // Width/depth are the frame extents; height is the headboard top. The
+  // headboard faces -z, so placing against the north wall needs no rotation.
+  {
+    id: 'haven-twin-bed',
+    name: 'Haven Twin Bed',
+    category: 'bed',
+    price: 430,
+    width: 1.05,
+    depth: 1.98,
+    height: 1.05,
+    styleTags: ['Scandinavian', 'warm modern'],
+    colors: ['oak', 'sage'],
+    material: 'oak',
+    stock: 14,
+    thumbnailGradient: 'linear-gradient(135deg, #C69C6D, #A3B18A)',
+  },
+  {
+    id: 'haven-full-bed',
+    name: 'Haven Full Bed',
+    category: 'bed',
+    price: 540,
+    width: 1.42,
+    depth: 1.98,
+    height: 1.05,
+    styleTags: ['Scandinavian', 'warm modern'],
+    colors: ['oak', 'sage'],
+    material: 'oak',
+    stock: 12,
+    thumbnailGradient: 'linear-gradient(135deg, #C69C6D, #A3B18A)',
+  },
+  {
+    id: 'haven-queen-bed',
+    name: 'Haven Queen Bed',
+    category: 'bed',
+    price: 680,
+    width: 1.58,
+    depth: 2.1,
+    height: 1.05,
+    styleTags: ['Scandinavian', 'warm modern'],
+    colors: ['oak', 'sage'],
+    material: 'oak',
+    stock: 9,
+    thumbnailGradient: 'linear-gradient(135deg, #C69C6D, #A3B18A)',
+  },
+  {
+    id: 'haven-king-bed',
+    name: 'Haven King Bed',
+    category: 'bed',
+    price: 890,
+    width: 1.98,
+    depth: 2.1,
+    height: 1.05,
+    styleTags: ['Scandinavian', 'warm modern'],
+    colors: ['oak', 'terracotta'],
+    material: 'oak',
+    stock: 6,
+    thumbnailGradient: 'linear-gradient(135deg, #C69C6D, #C96F4A)',
   },
 ];
 

@@ -17,7 +17,7 @@ bun run start      # serve the production build   (http://localhost:3000)
 bun run dev        # development server with HMR
 ```
 
-Expected baseline at time of writing: typecheck clean, **135 tests across 9
+Expected baseline at time of writing: typecheck clean, **138 tests across 9
 files**, production build succeeds with a single static route (`/`).
 
 ### Release-preparation pass — September 3, 2026
@@ -55,7 +55,7 @@ catalog products and the seeded room — no React, no store, no WebMCP.
 | `appearance.test.ts` | 7 | `updateRoomAppearance`: immutable single-field updates; same-value/empty patches return the original reference; invalid wall/floor/wallpaper ids rejected in wall → floor → wallpaper order with exact `field`/`allowedValues` details. |
 | `designs.test.ts` | 10 | Snapshot capture/restore fidelity and deep-copy isolation (mutating one side never affects the other); seeded demo snapshot restores byte-identically; corrupt/duplicate input rejected with structured codes. Room appearance and per-item variants round-trip byte-for-byte and are deep-cloned; missing/malformed appearance or variant data fails with `invalid_snapshot`. |
 | `cart.test.ts` | 19 | Marketplace-only adds (existing sofa/rug can never enter); all-or-nothing rejection; unique line ids; dedupe of already-carted instances; totals match catalog prices. Per-line `removeCartItem` recalculates totals, supports prune-to-empty, and fails with `cart_item_not_found`/`cart_checked_out`. Mock `checkoutCart` returns a deterministic order summary and marks the cart checked out (`cart_empty` guard); `clearCart` restarts an empty active cart. |
-| `catalog.test.ts` | 6 | Catalog integrity: data/domain category lists in sync, unique ids, positive extents, colors/materials inside the filter vocabularies. Audio-visual additions: TV/soundbar/speaker categories searchable, name-queryable, and placeable on the media-wall zone. |
+| `catalog.test.ts` | 9 | Catalog integrity: data/domain category lists in sync, unique ids, positive extents, colors/materials inside the filter vocabularies. Audio-visual additions: TV/soundbar/speaker categories searchable, name-queryable, and placeable on the media-wall zone. Bed additions: four-size Haven line under the bed category, strictly increasing extents, placeable on the living-area zone at 0° and 90°. |
 
 ## 3. WebMCP verification (browser)
 
