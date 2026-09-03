@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { APP_DESCRIPTION, APP_NAME } from "@/data/appIdentity";
+import { APP_DESCRIPTION, APP_NAME, APP_URL } from "@/data/appIdentity";
 
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   applicationName: APP_NAME,
   title: {
     default: `${APP_NAME} — 3D Room Planner`,
@@ -18,6 +19,14 @@ export const metadata: Metadata = {
     title: `${APP_NAME} — 3D Room Planner`,
     description: APP_DESCRIPTION,
     locale: "en_US",
+    url: APP_URL,
+    images: [{ url: new URL("/og.png", APP_URL).href, alt: `${APP_NAME} — Your room. Your agent. One shared canvas.` }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${APP_NAME} — 3D Room Planner`,
+    description: APP_DESCRIPTION,
+    images: [new URL("/og.png", APP_URL).href],
   },
   robots: { index: true, follow: true },
 };

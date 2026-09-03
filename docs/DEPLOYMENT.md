@@ -5,6 +5,12 @@ requirement. Room data lives in the browser and resets on reload. Sites is
 configured for a private static deployment. Public sharing requires separate
 approval; a private deployment is not a judge-accessible submission URL.
 
+Private deployment: [AgenticRoom](https://agenticroom.setyo-nugroho1337.chatgpt.site).
+The confirmed origin is recorded as `APP_URL` for link-preview metadata.
+The branded preview was generated with built-in image generation from the
+brief: white/slate and indigo landscape card, isometric living room, exact
+AgenticRoom title and tagline. It is bundled at `public/og.png`.
+
 ## Current build contract
 
 | Setting | Value |
