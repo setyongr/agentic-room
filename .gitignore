@@ -40,3 +40,4 @@ devpost-submission.md
 # local test artifacts
 /playwright-report/
 /test-results/
+/demo-assets/
