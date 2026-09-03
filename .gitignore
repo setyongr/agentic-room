@@ -32,6 +32,7 @@ bun-debug.log*
 # machine-local tooling and deployment state
 .codegraph/
 .devpost-hackathon-state.json
+devpost-submission.md
 .vercel/
 .netlify/
 .wrangler/
