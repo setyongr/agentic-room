@@ -14,7 +14,7 @@ Use Bun 1.3.14 and Node.js 20.9 or later. Install with
 
 | Target | Build | Output | Serve |
 | --- | --- | --- | --- |
-| Next.js / Node.js | `bun run build` | `.next/` | `bun run start` |
+| Next.js / Node.js | `bun run build:next` | `.next/` | `bun run start` |
 | Sites / static hosting | `bun run build:sites` | `out/` | Static host |
 
 The static build sets `SITES_STATIC_EXPORT=1` to enable Next.js export.
@@ -30,7 +30,7 @@ Use HTTPS; WebMCP also requires a compatible browser.
 `.openai/hosting.json` identifies the existing Site and selects `out/`.
 It contains deployment configuration, not credentials.
 
-1. Run `bun run check`, `bun run test`, and `bun run build:sites`.
+1. Run `bun run check`, `bun run test`, and `bun run build`.
 2. Push the validated source to the Sites-managed repository.
 3. Package the static output with the Sites packaging helper, save a version,
    and deploy it with the approved access settings.

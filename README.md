@@ -43,12 +43,13 @@ see the [integration guide](docs/WEBMCP.md) for setup and tool details.
 ```bash
 bun run check       # TypeScript
 bun run test        # Domain tests
-bun run build       # Production build
+bun run build       # Production static build (Sites)
+bun run build:next  # Standard Next.js build for `bun run start`
 bun run start       # Serve the production build
 ```
 
-For static hosting, use `bun run build:sites`. See [deployment](docs/DEPLOYMENT.md)
-for build settings and access requirements.
+See [deployment](docs/DEPLOYMENT.md) for hosting settings and access
+requirements.
 
 ## Limitations
 
