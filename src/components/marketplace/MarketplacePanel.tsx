@@ -62,6 +62,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   decor: 'Decor',
 };
 
+const TAB_HEADING: Record<FurnishTab, string> = {
+  furniture: 'Furniture catalog',
+  room: 'Room size',
+  finishes: 'Room finishes',
+};
+
+/** Control styles shared by the pinned toolbar controls. */
+const TOOLBAR_CONTROL =
+  'min-h-11 w-full rounded-control border border-border bg-surface-raised text-sm text-text transition-colors motion-reduce:transition-none';
+
 export function MarketplacePanel() {
   const searchProducts = useRoomStore((state) => state.searchProducts);
   const getAvailablePlacementZones = useRoomStore((state) => state.getAvailablePlacementZones);
@@ -83,7 +93,10 @@ export function MarketplacePanel() {
   const [placingProductId, setPlacingProductId] = useState<string | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<Feedback>(null);
+  /** The extra style/color/price controls collapse behind a toolbar toggle. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   /** Uncommitted catalog choice per product; defaults to the first authored color. */
   const [selectedColorByProduct, setSelectedColorByProduct] = useState<Record<string, string>>({});
   /** At most one product card detail region is expanded at a time. */
@@ -109,6 +122,8 @@ export function MarketplacePanel() {
     [filters, page, searchProducts],
   );
   const hasActiveFilters = Boolean(query || category || style || color || minPrice || maxPrice);
+  /** Filter groups set inside the collapsible panel (style, color, price). */
+  const activeFilterCount = Number(Boolean(style)) + Number(Boolean(color)) + Number(Boolean(minPrice || maxPrice));
   const hasMore = page * PAGE_SIZE < results.total;
 
   /** Compatible placement-zone names per category shown on the current page. */
@@ -127,6 +142,7 @@ export function MarketplacePanel() {
   function resetPage(action: () => void) {
     action();
     setPage(1);
+    listRef.current?.scrollTo({ top: 0 });
   }
 
   function clearFilters() {
@@ -138,6 +154,14 @@ export function MarketplacePanel() {
     setMaxPrice('');
     setPage(1);
     setFeedback(null);
+    listRef.current?.scrollTo({ top: 0 });
+  }
+
+  function toggleTab(tab: FurnishTab) {
+    setFurnishTab(tab);
+    setFeedback(null);
+    setUploadMessage(null);
+    listRef.current?.scrollTo({ top: 0 });
   }
 
   async function handleUploadModel(file: File | undefined) {
@@ -163,14 +187,16 @@ export function MarketplacePanel() {
     } else {
       setUploadMessage({
         kind: 'success',
-        message: `“${prepared.name}” is placed in the room${added.ok ? '' : ''}. Open Edit to move or rotate it.`,
+        message: `“${prepared.name}” is placed in the room. Open Edit to move or rotate it.`,
       });
     }
     setUploadBusy(false);
+    listRef.current?.scrollTo({ top: 0 });
   }
 
   function handlePlace(product: FurnitureProduct) {
     setFeedback(null);
+    setUploadMessage(null);
     setPlacingProductId(product.id);
 
     const availableZones = getAvailablePlacementZones(product.category);
@@ -223,33 +249,26 @@ export function MarketplacePanel() {
     selectItem(placed.data.item.instanceId);
     setFeedback({ kind: 'success', message: `${product.name} is placed and selected in the room.` });
     setPlacingProductId(null);
+    listRef.current?.scrollTo({ top: 0 });
   }
+
+  const notice = uploadMessage ?? feedback;
 
   return (
     <aside className="flex h-full min-h-0 flex-col bg-surface" aria-label="Marketplace">
-      <header className="border-b border-border px-4 py-4 sm:px-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-accent-strong uppercase">Marketplace</p>
-            <h2 className="mt-1 text-lg font-semibold tracking-tight text-text">
-              {furnishTab === 'furniture' ? 'Find furniture' : 'Style the room'}
-            </h2>
-          </div>
-          {furnishTab === 'furniture' ? (
-            <span className="pt-1 text-sm font-medium text-text-muted tabular-nums">
-              {results.total} {results.total === 1 ? 'result' : 'results'}
-            </span>
-          ) : null}
-        </div>
+      {/* The rail's own heading is structural; the segmented control below carries the visible label. */}
+      <h2 className="sr-only">{TAB_HEADING[furnishTab]}</h2>
 
-        <div className="mt-3 flex rounded-control bg-surface-muted p-1" role="group" aria-label="Furnish tool">
+      {/* Pinned toolbar: mode tabs + (furniture) search, category and filters. */}
+      <div className="shrink-0 border-b border-border px-4 pt-3 pb-3 sm:px-5">
+        <div className="flex rounded-control bg-surface-muted p-1" role="group" aria-label="Furnish tool">
           {FURNISH_SEGMENTS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
               aria-pressed={furnishTab === id}
-              onClick={() => setFurnishTab(id)}
-              className={`inline-flex min-h-11 w-1/3 min-w-0 items-center justify-center gap-1 rounded-control px-1 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
+              onClick={() => toggleTab(id)}
+              className={`inline-flex min-h-11 w-1/3 min-w-0 items-center justify-center gap-1 rounded-control px-0.5 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
                 furnishTab === id ? 'bg-surface text-text shadow-card' : 'text-text-muted hover:text-text'
               }`}
             >
@@ -261,35 +280,62 @@ export function MarketplacePanel() {
 
         {furnishTab === 'furniture' ? (
           <>
-            <div className="relative mt-3">
+            <div className="relative mt-2.5">
               <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-muted" />
               <label className="sr-only" htmlFor="marketplace-search">Search furniture</label>
               <input
                 id="marketplace-search"
-                className="min-h-11 w-full rounded-control border border-border bg-surface-raised py-2 pr-3 pl-10 text-sm text-text placeholder:text-text-faint"
-                placeholder="Search furniture, materials, styles"
+                className="min-h-11 w-full rounded-control border border-border bg-surface-raised py-2 pr-3 pl-10 text-sm text-text transition-colors placeholder:text-text-faint focus:border-accent motion-reduce:transition-none"
+                placeholder="Search name, style or color"
                 type="search"
                 value={query}
                 onChange={(event) => resetPage(() => setQuery(event.target.value))}
               />
             </div>
 
-            <div className="mt-3">
-              <FilterSelect label="Category" value={category} onChange={(value) => resetPage(() => setCategory(value))}>
-                <option value="">All categories</option>
-                {categories.map((item) => <option key={item} value={item}>{CATEGORY_LABELS[item]}</option>)}
-              </FilterSelect>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <label className="sr-only" htmlFor="marketplace-category">Category</label>
+                <select
+                  id="marketplace-category"
+                  className={`${TOOLBAR_CONTROL} min-w-0 px-2`}
+                  value={category}
+                  onChange={(event) => resetPage(() => setCategory(event.target.value))}
+                >
+                  <option value="">All categories</option>
+                  {categories.map((item) => <option key={item} value={item}>{CATEGORY_LABELS[item]}</option>)}
+                </select>
+              </div>
+              <button
+                type="button"
+                aria-expanded={filtersOpen}
+                aria-controls="marketplace-filters"
+                onClick={() => setFiltersOpen((open) => !open)}
+                className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-control border px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none ${
+                  filtersOpen
+                    ? 'border-accent bg-accent-soft text-accent-strong'
+                    : 'border-border bg-surface-raised text-text hover:border-accent'
+                }`}
+              >
+                <SlidersHorizontal aria-hidden="true" className="size-4" />
+                <span>Filters</span>
+                {activeFilterCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-pill bg-accent px-1 text-[11px] leading-4 font-bold text-on-accent tabular-nums">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`size-3.5 transition-transform motion-reduce:transition-none ${filtersOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
             </div>
 
-            <details className="mt-2" open={undefined}>
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-text">
-                <span className="flex items-center gap-2">
-                  <SlidersHorizontal aria-hidden="true" className="size-4 text-accent" />
-                  Filters
-                </span>
-                <span className="text-xs font-medium text-text-muted">{hasActiveFilters ? 'Active' : 'Optional'}</span>
-              </summary>
-              <div className="grid grid-cols-2 gap-3 border-t border-border py-3">
+            {filtersOpen ? (
+              <div
+                id="marketplace-filters"
+                className="mt-2 grid grid-cols-2 gap-x-2.5 gap-y-1 rounded-control border border-border bg-surface-muted/40 p-2.5"
+              >
                 <FilterSelect label="Style" value={style} onChange={(value) => resetPage(() => setStyle(value))}>
                   <option value="">All styles</option>
                   {styles.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -308,22 +354,100 @@ export function MarketplacePanel() {
                 </div>
                 {hasActiveFilters ? (
                   <button className="col-span-2 min-h-11 justify-self-start rounded-control px-2 text-sm font-medium text-accent-strong transition-colors hover:bg-accent-soft motion-reduce:transition-none" type="button" onClick={clearFilters}>
-                    Clear filters
+                    Clear all filters and search
                   </button>
                 ) : null}
               </div>
-            </details>
+            ) : null}
+          </>
+        ) : null}
+      </div>
 
-            <div className="mt-3 flex items-center gap-3 rounded-control border border-dashed border-border bg-surface-muted/50 px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-text">Upload your own 3D model</p>
-                <p className="mt-0.5 text-xs text-text-muted">.glb up to 15 MB · auto-fitted · session only</p>
+      {furnishTab === 'finishes' ? (
+        <RoomAppearancePanel />
+      ) : furnishTab === 'room' ? (
+        <RoomSizePanel />
+      ) : (
+        <>
+          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 sm:px-5">
+            {notice ? (
+              <div
+                aria-atomic="true"
+                aria-live="polite"
+                role="status"
+                className="sticky top-0 z-10 -mx-4 border-b border-border bg-surface px-4 py-2.5 sm:-mx-5 sm:px-5"
+              >
+                <p className={`flex items-start gap-2 text-sm ${notice.kind === 'success' ? 'text-success' : 'text-error'}`}>
+                  {notice.kind === 'success' ? (
+                    <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                  ) : (
+                    <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                  )}
+                  <span className="min-w-0">{notice.message}</span>
+                </p>
+              </div>
+            ) : null}
+
+            <p className="pt-3 text-xs font-medium text-text-muted tabular-nums">
+              {results.total} {results.total === 1 ? 'piece' : 'pieces'}
+            </p>
+
+            {results.products.length > 0 ? (
+              <ul className="mt-2.5 grid grid-cols-2 gap-2.5" role="list">
+                {results.products.map((product) => {
+                  const expanded = expandedProductId === product.id;
+                  return (
+                    <li key={product.id} className={`min-w-0 ${expanded ? 'col-span-2' : ''}`}>
+                      <ProductCard
+                        product={product}
+                        placing={placingProductId === product.id}
+                        selectedColor={selectedColorByProduct[product.id] ?? product.colors[0] ?? ''}
+                        zoneNames={zoneNamesByCategory[product.category] ?? ''}
+                        expanded={expanded}
+                        onSelectColor={(colorName) =>
+                          setSelectedColorByProduct((current) => ({ ...current, [product.id]: colorName }))
+                        }
+                        onToggleExpand={() =>
+                          setExpandedProductId((current) => (current === product.id ? null : product.id))
+                        }
+                        onPlace={handlePlace}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="flex min-h-72 flex-col items-center justify-center py-10 text-center">
+                <span className="flex size-12 items-center justify-center rounded-pill bg-accent-soft">
+                  <PackageOpen aria-hidden="true" className="size-6 text-accent-strong" />
+                </span>
+                <h3 className="mt-4 text-base font-semibold text-text">No pieces match yet</h3>
+                <p className="mt-1 max-w-55 text-sm leading-6 text-text-muted">
+                  Try a broader style, color, or price range to bring more of the collection into view.
+                </p>
+                {hasActiveFilters ? (
+                  <button className="mt-4 min-h-11 rounded-control bg-accent px-4 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong motion-reduce:transition-none" type="button" onClick={clearFilters}>
+                    Show the full collection
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            <div className="mt-3 rounded-card border border-dashed border-border bg-surface-muted/40 p-3">
+              <div className="flex items-center gap-2.5">
+                <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-soft">
+                  <Upload className="size-4 text-accent-strong" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-text">Upload your own 3D model</p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-text-muted">.glb up to 15 MB · auto-fitted · session only</p>
+                </div>
               </div>
               <button
                 type="button"
                 disabled={uploadBusy}
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-control bg-accent px-3 text-xs font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none"
+                className="mt-2.5 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control bg-accent px-3 text-xs font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none"
               >
                 <Upload aria-hidden="true" className="size-4" />
                 {uploadBusy ? 'Reading…' : 'Upload'}
@@ -341,77 +465,14 @@ export function MarketplacePanel() {
                 }}
               />
             </div>
-            {uploadMessage ? (
-              <p
-                className={`mt-2 flex items-start gap-1.5 rounded-control px-3 py-2 text-xs ${
-                  uploadMessage.kind === 'error' ? 'bg-error-soft text-error' : 'bg-success-soft text-success'
-                }`}
-                role="status"
-              >
-                {uploadMessage.kind === 'error' ? (
-                  <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                ) : (
-                  <CheckCircle2 aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                )}
-                {uploadMessage.message}
-              </p>
-            ) : null}
-          </>
-        ) : null}
-      </header>
-
-      {furnishTab === 'finishes' ? (
-        <RoomAppearancePanel />
-      ) : furnishTab === 'room' ? (
-        <RoomSizePanel />
-      ) : (
-        <>
-          {feedback ? (
-            <div aria-atomic="true" aria-live="polite" className="border-b border-border px-4 py-3 sm:px-5">
-              <div className={`flex gap-2 text-sm ${feedback.kind === 'success' ? 'text-success' : 'text-error'}`}>
-                {feedback.kind === 'success' ? <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
-                <p>{feedback.message}</p>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 sm:px-5">
-            {results.products.length > 0 ? (
-              <div className="divide-y divide-border">
-                {results.products.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    placing={placingProductId === product.id}
-                    selectedColor={selectedColorByProduct[product.id] ?? product.colors[0] ?? ''}
-                    zoneNames={zoneNamesByCategory[product.category] ?? ''}
-                    expanded={expandedProductId === product.id}
-                    onSelectColor={(colorName) =>
-                      setSelectedColorByProduct((current) => ({ ...current, [product.id]: colorName }))
-                    }
-                    onToggleExpand={() =>
-                      setExpandedProductId((current) => (current === product.id ? null : product.id))
-                    }
-                    onPlace={handlePlace}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="flex min-h-64 flex-col items-start justify-center py-8">
-                <PackageOpen aria-hidden="true" className="size-6 text-accent" />
-                <h3 className="mt-4 text-base font-semibold text-text">No pieces match yet</h3>
-                <p className="mt-1 text-sm leading-6 text-text-muted">Try a broader style, color, or price range to bring more of the collection into view.</p>
-                {hasActiveFilters ? <button className="mt-4 min-h-11 rounded-control bg-accent px-4 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong motion-reduce:transition-none" type="button" onClick={clearFilters}>Show the full collection</button> : null}
-              </div>
-            )}
 
             {results.total > PAGE_SIZE ? (
-              <nav className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3" aria-label="Marketplace pagination">
-                <button className="min-h-11 rounded-control px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={page === 1} type="button" onClick={() => setPage((currentPage) => currentPage - 1)}>
+              <nav className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3" aria-label="Marketplace pagination">
+                <button className="min-h-11 rounded-control px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={page === 1} type="button" onClick={() => resetPage(() => setPage((currentPage) => currentPage - 1))}>
                   Previous
                 </button>
                 <span className="text-xs text-text-muted tabular-nums">Page {page}</span>
-                <button className="min-h-11 rounded-control px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={!hasMore} type="button" onClick={() => setPage((currentPage) => currentPage + 1)}>
+                <button className="min-h-11 rounded-control px-3 text-sm font-semibold text-text transition-colors hover:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={!hasMore} type="button" onClick={() => resetPage(() => setPage((currentPage) => currentPage + 1))}>
                   Next
                 </button>
               </nav>
@@ -423,6 +484,10 @@ export function MarketplacePanel() {
   );
 }
 
+/**
+ * Compact catalog tile, or — when expanded — a full-width card carrying the
+ * dimension/style/zone details next to the place action.
+ */
 function ProductCard({
   product,
   placing,
@@ -444,118 +509,201 @@ function ProductCard({
 }) {
   const available = product.stock > 0;
   const categoryLabel = CATEGORY_LABELS[product.category] ?? product.category;
-  const groupName = `colorway-${product.id}`;
   const detailsId = `product-details-${product.id}`;
-  const material = product.material;
-  return (
-    <article className="py-4">
-      <div className="flex gap-3">
-        <div
-          className="size-20 shrink-0 rounded-control border border-border"
-          style={{ background: product.thumbnailGradient ?? 'var(--surface-muted)' }}
-          aria-hidden="true"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+  const gradient = product.thumbnailGradient ?? 'var(--surface-muted)';
+  const soldOutVeil = !available ? (
+    <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-surface/60 text-xs font-semibold text-text">
+      Sold out
+    </span>
+  ) : null;
+
+  if (expanded) {
+    return (
+      <article className="flex min-h-36 overflow-hidden rounded-card border border-border bg-surface">
+        <div className="relative w-20 shrink-0 border-r border-border" style={{ background: gradient }} aria-hidden="true">
+          {soldOutVeil}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-text-muted">{categoryLabel}</p>
-              <h3 className="text-sm font-semibold leading-5 text-text">{product.name}</h3>
+              <p className="truncate text-[11px] font-semibold tracking-widest text-text-faint uppercase">{categoryLabel}</p>
+              <h3 className="line-clamp-2 text-[15px] leading-6 font-semibold text-text">{product.name}</h3>
             </div>
             <span className="shrink-0 text-sm font-semibold text-text tabular-nums">{CURRENCY.format(product.price)}</span>
           </div>
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
-            <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-pill border border-border" style={{ background: furnitureHex(selectedColor) }} />
-            <span className="truncate capitalize">{selectedColor} · {material}</span>
-          </p>
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${available ? 'text-success' : 'text-error'}`}>
-              <span aria-hidden="true" className={`size-1.5 rounded-pill ${available ? 'bg-success' : 'bg-error'}`} />
-              {available ? `${product.stock} in stock` : 'Out of stock'}
-            </span>
-            <button aria-label={`Place ${product.name} in room`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none" disabled={!available || placing} type="button" onClick={() => onPlace(product)}>
-              <Plus aria-hidden="true" className="size-4" />
-              {placing ? 'Placing…' : 'Place'}
+
+          <ColorSwatches
+            product={product}
+            selectedColor={selectedColor}
+            available={available}
+            onSelectColor={onSelectColor}
+          />
+
+          <dl id={detailsId} className="grid gap-1.5 text-xs">
+            <div className="grid gap-0.5">
+              <dt className="font-medium text-text-muted">Dimensions</dt>
+              <dd className="tabular-nums text-text">{product.width} W × {product.depth} D × {product.height} H m</dd>
+            </div>
+            <div className="grid gap-0.5">
+              <dt className="font-medium text-text-muted">Style</dt>
+              <dd className="text-text">{product.styleTags.join(', ')}</dd>
+            </div>
+            <div className="grid gap-0.5">
+              <dt className="font-medium text-text-muted">Fits in</dt>
+              <dd className="text-text">{zoneNames || 'Any open space'}</dd>
+            </div>
+          </dl>
+
+          <div className="mt-auto flex items-center gap-2 pt-1.5">
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={detailsId}
+              onClick={onToggleExpand}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-control border border-border px-3 text-xs font-semibold text-text transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+            >
+              Hide details
+              <ChevronDown aria-hidden="true" className="size-3.5 rotate-180" />
+            </button>
+            <button
+              aria-label={`Place ${product.name} in room`}
+              className="inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-control bg-accent px-1.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none"
+              disabled={!available || placing}
+              type="button"
+              onClick={() => onPlace(product)}
+            >
+              <Plus aria-hidden="true" className="size-4 shrink-0" />
+              <span className="whitespace-nowrap">{placing ? 'Placing…' : 'Place'}</span>
             </button>
           </div>
         </div>
-      </div>
+      </article>
+    );
+  }
 
-      {product.colors.length > 1 ? (
-        <fieldset className="mt-3">
-          <legend className="sr-only">Available colors for {product.name}</legend>
-          <ul className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Color options for ${product.name}`}>
-            {product.colors.map((colorName) => {
-              const checked = selectedColor === colorName;
-              const inputId = `${groupName}-${colorName}`;
-              return (
-                <li key={colorName}>
-                  <input
-                    className="peer sr-only"
-                    id={inputId}
-                    type="radio"
-                    name={groupName}
-                    value={colorName}
-                    checked={checked}
-                    disabled={!available}
-                    onChange={() => onSelectColor(colorName)}
-                  />
-                  <label
-                    htmlFor={inputId}
-                    className={`inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-pill border px-2.5 text-xs font-medium transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent motion-reduce:transition-none ${
-                      checked
-                        ? 'border-accent bg-accent-soft text-accent-strong'
-                        : 'border-border bg-surface-raised text-text-muted hover:border-accent hover:text-text'
-                    } ${!available ? 'cursor-not-allowed opacity-50' : ''}`}
-                  >
-                    <span aria-hidden="true" className="inline-block size-3.5 shrink-0 rounded-pill border border-black/10" style={{ background: furnitureHex(colorName) }} />
-                    <span className="capitalize">{colorName}</span>
-                    {checked ? <CheckCircle2 aria-hidden="true" className="size-3.5 text-accent" /> : null}
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        </fieldset>
-      ) : null}
-
-      <div className="mt-2">
+  return (
+    <article className="flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface transition-colors hover:border-accent/50 motion-reduce:transition-none">
+      <div className="relative h-24 w-full shrink-0" style={{ background: gradient }} aria-hidden="true">
         <button
           type="button"
-          aria-expanded={expanded}
-          aria-controls={detailsId}
+          aria-label={`View details for ${product.name}`}
+          aria-expanded={false}
           onClick={onToggleExpand}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-xs font-semibold text-accent-strong transition-colors hover:bg-accent-soft motion-reduce:transition-none"
+          className="absolute top-1 right-1 inline-flex size-9 items-center justify-center rounded-control border border-border bg-surface/85 text-text-muted backdrop-blur-sm transition-colors hover:bg-surface hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
         >
-          {expanded ? 'Hide details' : 'View details'}
-          <ChevronDown aria-hidden="true" className={`size-3.5 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
+          <ChevronDown aria-hidden="true" className="size-4" />
         </button>
-        {expanded ? (
-          <dl id={detailsId} className="mt-1 space-y-1 rounded-control border border-border bg-surface-muted/50 px-3 py-2 text-xs leading-5 text-text-muted">
-            <div className="flex justify-between gap-3">
-              <dt className="font-medium text-text">Dimensions</dt>
-              <dd className="tabular-nums">{product.width} W × {product.depth} D × {product.height} H m</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="font-medium text-text">Style</dt>
-              <dd className="text-right">{product.styleTags.join(', ')}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="font-medium text-text">Fits in</dt>
-              <dd className="text-right">{zoneNames || 'Any open space'}</dd>
-            </div>
-          </dl>
-        ) : null}
+        {soldOutVeil}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1 p-2.5">
+        <h3 className="line-clamp-2 min-h-10 text-sm leading-5 font-semibold text-text">{product.name}</h3>
+
+        <ColorSwatches
+          product={product}
+          selectedColor={selectedColor}
+          available={available}
+          onSelectColor={onSelectColor}
+        />
+
+        <p className="mt-auto flex items-baseline justify-between gap-1.5 pt-0.5">
+          <span className="text-sm font-semibold text-text tabular-nums">{CURRENCY.format(product.price)}</span>
+          <span className={`shrink-0 text-[11px] font-medium tabular-nums ${available ? 'text-text-muted' : 'text-error'}`}>
+            {available ? `${product.stock} left` : 'Sold out'}
+          </span>
+        </p>
+        <button
+          aria-label={`Place ${product.name} in room`}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control bg-accent px-2 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-faint motion-reduce:transition-none"
+          disabled={!available || placing}
+          type="button"
+          onClick={() => onPlace(product)}
+        >
+          <Plus aria-hidden="true" className="size-4 shrink-0" />
+          <span className="truncate">{placing ? 'Placing…' : 'Place'}</span>
+        </button>
       </div>
     </article>
+  );
+}
+
+/**
+ * Colorway picker for a product card. Products with a single color render a
+ * static dot + material caption instead of a radio group, keeping the rows
+ * the same height either way.
+ */
+function ColorSwatches({
+  product,
+  selectedColor,
+  available,
+  onSelectColor,
+}: {
+  product: FurnitureProduct;
+  selectedColor: string;
+  available: boolean;
+  onSelectColor: (color: string) => void;
+}) {
+  if (product.colors.length <= 1) {
+    return (
+      <p className="flex h-9 min-w-0 items-center gap-1.5 text-xs text-text-muted">
+        <span
+          aria-hidden="true"
+          className="inline-block size-3.5 shrink-0 rounded-pill border border-black/10"
+          style={{ background: furnitureHex(selectedColor) }}
+        />
+        <span className="truncate capitalize">{selectedColor} · {product.material}</span>
+      </p>
+    );
+  }
+
+  const groupName = `colorway-${product.id}`;
+  return (
+    <fieldset className="min-w-0">
+      <legend className="sr-only">Color options for {product.name}</legend>
+      <ul className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label={`Colors for ${product.name}`}>
+        {product.colors.map((colorName) => {
+          const checked = selectedColor === colorName;
+          const inputId = `${groupName}-${colorName}`;
+          return (
+            <li key={colorName}>
+              <input
+                className="peer sr-only"
+                id={inputId}
+                type="radio"
+                name={groupName}
+                value={colorName}
+                checked={checked}
+                disabled={!available}
+                onChange={() => onSelectColor(colorName)}
+              />
+              <label
+                htmlFor={inputId}
+                aria-label={colorName}
+                className={`inline-flex size-9 cursor-pointer items-center justify-center rounded-pill border transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent motion-reduce:transition-none ${
+                  checked
+                    ? 'border-accent bg-accent-soft ring-2 ring-accent/25'
+                    : 'border-border bg-surface-raised hover:border-accent'
+                } ${!available ? 'cursor-not-allowed opacity-60' : ''}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block size-4 rounded-pill border border-black/10"
+                  style={{ background: furnitureHex(colorName) }}
+                />
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </fieldset>
   );
 }
 
 function FilterSelect({ children, label, onChange, value }: { children: ReactNode; label: string; onChange: (value: string) => void; value: string }) {
   const id = `marketplace-${label.toLowerCase()}`;
   return (
-    <div>
+    <div className="min-w-0">
       <label className="mb-1 block text-xs font-medium text-text-muted" htmlFor={id}>{label}</label>
-      <select id={id} className="min-h-11 w-full rounded-control border border-border bg-surface-raised px-2 text-sm text-text" value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>
+      <select id={id} className={`${TOOLBAR_CONTROL} px-2`} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>
     </div>
   );
 }
