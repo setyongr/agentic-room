@@ -2,7 +2,7 @@
 
 **Your room. Your agent. One shared canvas.**
 
-[Private Sites deployment](https://agenticroom.setyo-nugroho1337.chatgpt.site) — owner access only;
+[Private Sites deployment](https://agenticroom.setyongr.chatgpt.site) — owner access only;
 not yet a public hackathon demo. See [deployment notes](docs/DEPLOYMENT.md).
 
 AgenticRoom is a browser-based living-room design studio: a deterministic
