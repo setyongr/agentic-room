@@ -4,6 +4,9 @@ Design your room. Shop the furniture. Stay on budget.
 
 ![AgenticRoom living-room planner](public/og.png)
 
+[Try the live planner](https://agenticroom.setyongr.chatgpt.site) ·
+[Watch the two-minute demo](https://www.youtube.com/watch?v=8pLkVAU-G80)
+
 AgenticRoom is a 3D furniture shopping and room-planning workspace for people
 and browser agents. Browse pieces that fit your budget, place them in the room,
 compare cheaper alternatives, and carry your picks into an integrated cart.
